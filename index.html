@@ -125,7 +125,7 @@
   </footer>
 
   <script>
-    fetch('links.json')
+    fetch('https://raw.githubusercontent.com/circusreport/circus-report/main/links.json')
       .then(response => response.json())
       .then(data => {
         document.getElementById('last-updated').textContent =
