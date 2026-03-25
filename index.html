@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MY NEWS AGGREGATOR</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #ffffff;
+      font-family: Arial, sans-serif;
+      color: #000000;
+    }
+
+    header {
+      background: #000000;
+      color: #ffffff;
+      text-align: center;
+      padding: 20px;
+      border-bottom: 4px solid #cc0000;
+    }
+
+    header h1 {
+      font-size: 2.5em;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+    }
+
+    header p {
+      font-size: 0.85em;
+      color: #aaaaaa;
+      margin-top: 5px;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .top-story {
+      text-align: center;
+      border-bottom: 2px solid #cc0000;
+      padding-bottom: 20px;
+      margin-bottom: 20px;
+    }
+
+    .top-story a {
+      font-size: 1.8em;
+      font-weight: bold;
+      color: #cc0000;
+      text-decoration: none;
+      line-height: 1.3;
+    }
+
+    .top-story a:hover { text-decoration: underline; }
+
+    .links-grid {
+      columns: 2;
+      column-gap: 40px;
+    }
+
+    .link-item {
+      break-inside: avoid;
+      margin-bottom: 10px;
+    }
+
+    .link-item a {
+      font-size: 0.95em;
+      color: #000080;
+      text-decoration: none;
+    }
+
+    .link-item a:hover { text-decoration: underline; }
+
+    .link-item a:visited { color: #551a8b; }
+
+    .divider {
+      border: none;
+      border-top: 1px solid #cccccc;
+      margin: 20px 0;
+    }
+
+    footer {
+      text-align: center;
+      padding: 20px;
+      font-size: 0.75em;
+      color: #888888;
+      border-top: 2px solid #000000;
+      margin-top: 40px;
+    }
+
+    @media (max-width: 600px) {
+      .links-grid { columns: 1; }
+      header h1 { font-size: 1.6em; }
+      .top-story a { font-size: 1.3em; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>MY NEWS AGGREGATOR</h1>
+    <p id="last-updated"></p>
+  </header>
+
+  <div class="container">
+    <div class="top-story" id="top-story"></div>
+    <hr class="divider">
+    <div class="links-grid" id="links-grid"></div>
+  </div>
+
+  <footer>
+    <p>Updated throughout the day</p>
+  </footer>
+
+  <script>
+    // Fetch and display links from links.json
+    fetch('links.json')
+      .then(response => response.json())
+      .then(data => {
+        // Show last updated time
+        document.getElementById('last-updated').textContent =
+          'Last updated: ' + new Date(data.lastUpdated).toLocaleString();
+
+        // Top story
+        if (data.links.length > 0) {
+          const top = data.links[0];
+          document.getElementById('top-story').innerHTML =
+            `<a href="${top.url}" target="_blank">${top.headline}</a>`;
+        }
+
+        // Remaining links
+        const grid = document.getElementById('links-grid');
+        data.links.slice(1).forEach(link => {
+          const div = document.createElement('div');
+          div.className = 'link-item';
+          div.innerHTML = `<a href="${link.url}" target="_blank">&#9654; ${link.headline}</a>`;
+          grid.appendChild(div);
+        });
+      })
+      .catch(() => {
+        document.getElementById('top-story').innerHTML =
+          '<p>No links yet. Check back soon.</p>';
+      });
+  </script>
+
+</body>
+</html>
