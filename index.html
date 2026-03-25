@@ -46,12 +46,21 @@
       margin-bottom: 20px;
     }
 
+    .top-story img {
+      width: 100%;
+      max-height: 400px;
+      object-fit: cover;
+      margin-bottom: 15px;
+      display: block;
+    }
+
     .top-story a {
       font-size: 1.8em;
       font-weight: bold;
       color: #cc0000;
       text-decoration: none;
       line-height: 1.3;
+      display: block;
     }
 
     .top-story a:hover { text-decoration: underline; }
@@ -116,22 +125,30 @@
   </footer>
 
   <script>
-    // Fetch and display links from links.json
     fetch('links.json')
       .then(response => response.json())
       .then(data => {
-        // Show last updated time
         document.getElementById('last-updated').textContent =
           'Last updated: ' + new Date(data.lastUpdated).toLocaleString();
 
-        // Top story
         if (data.links.length > 0) {
           const top = data.links[0];
-          document.getElementById('top-story').innerHTML =
-            `<a href="${top.url}" target="_blank">${top.headline}</a>`;
+          const topDiv = document.getElementById('top-story');
+
+          if (top.image) {
+            const img = document.createElement('img');
+            img.src = top.image;
+            img.alt = top.headline;
+            topDiv.appendChild(img);
+          }
+
+          const link = document.createElement('a');
+          link.href = top.url;
+          link.target = '_blank';
+          link.textContent = top.headline;
+          topDiv.appendChild(link);
         }
 
-        // Remaining links
         const grid = document.getElementById('links-grid');
         data.links.slice(1).forEach(link => {
           const div = document.createElement('div');
