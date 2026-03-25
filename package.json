@@ -2,6 +2,9 @@
   "name": "news-aggregator-bot",
   "version": "1.0.0",
   "main": "bot.js",
+  "engines": {
+    "node": "18.x"
+  },
   "scripts": {
     "start": "node bot.js"
   },
@@ -12,18 +15,3 @@
     "express": "^4.18.2"
   }
 }
-```
-
-5. Click **Commit new file**
-
----
-
-### File 2: Procfile
-
-This tells Railway exactly how to start your bot.
-
-1. **Add file** → **Create new file**
-2. Name it exactly: `Procfile` (capital P, no extension)
-3. Paste this:
-```
-web: node bot.js
