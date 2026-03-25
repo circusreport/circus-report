@@ -8,7 +8,6 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
-// Configure Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -18,10 +17,8 @@ cloudinary.config({
 const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { webHook: true });
 const AUTHORIZED_USER = parseInt(process.env.TELEGRAM_USER_ID);
 
-// Store pending submissions temporarily
 const pending = {};
 
-// Helper: get current links.json from GitHub
 async function getLinksJson() {
   const url = `https://api.github.com/repos/${process.env.GITHUB_USERNAME}/${process.env.GITHUB_REPO}/contents/links.json`;
   const response = await axios.get(url, {
@@ -31,7 +28,6 @@ async function getLinksJson() {
   return { data: JSON.parse(content), sha: response.data.sha };
 }
 
-// Helper: save updated links.json to GitHub
 async function saveLinksJson(data, sha) {
   const url = `https://api.github.com/repos/${process.env.GITHUB_USERNAME}/${process.env.GITHUB_REPO}/contents/links.json`;
   const content = Buffer.from(JSON.stringify(data, null, 2)).toString('base64');
@@ -44,7 +40,6 @@ async function saveLinksJson(data, sha) {
   });
 }
 
-// Handle incoming messages
 async function handleMessage(msg) {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
@@ -57,21 +52,18 @@ async function handleMessage(msg) {
   const text = msg.text || '';
   const photo = msg.photo;
 
-  // Cancel command
   if (text.toLowerCase() === '/cancel' || text.toLowerCase() === 'cancel') {
     delete pending[userId];
     bot.sendMessage(chatId, 'Cancelled. Send a URL or image to start over.');
     return;
   }
 
-  // If user sends a URL
   if (text.startsWith('http')) {
     pending[userId] = { url: text, step: 'awaiting_headline' };
     bot.sendMessage(chatId, 'Got the URL. Now send me the headline.');
     return;
   }
 
-  // If user sends a photo
   if (photo) {
     const fileId = photo[photo.length - 1].file_id;
     bot.sendMessage(chatId, 'Got the image. Uploading to Cloudinary...');
@@ -91,39 +83,36 @@ async function handleMessage(msg) {
     return;
   }
 
-  // If awaiting headline
-  if (pending[userId]?.step === 'awaiting_headline') {
+  if (pending[userId] && pending[userId].step === 'awaiting_headline') {
     pending[userId].headline = text;
     pending[userId].step = 'awaiting_position';
     bot.sendMessage(chatId, 'Make this the top story? Reply yes or no.');
     return;
   }
 
-  // If awaiting URL after image
-  if (pending[userId]?.step === 'awaiting_url_after_image') {
+  if (pending[userId] && pending[userId].step === 'awaiting_url_after_image') {
     pending[userId].url = text;
     pending[userId].step = 'awaiting_headline';
     bot.sendMessage(chatId, 'Got it. Now send me the headline.');
     return;
   }
 
-  // If awaiting position
-  if (pending[userId]?.step === 'awaiting_position') {
+  if (pending[userId] && pending[userId].step === 'awaiting_position') {
     const makeTop = text.toLowerCase() === 'yes';
     try {
       const { data, sha } = await getLinksJson();
       const newLink = {
         headline: pending[userId].headline,
-        url: pending[userId].url,
-        ...(pending[userId].image && { image: pending[userId].image })
+        url: pending[userId].url
       };
-
+      if (pending[userId].image) {
+        newLink.image = pending[userId].image;
+      }
       if (makeTop) {
         data.links.unshift(newLink);
       } else {
         data.links.push(newLink);
       }
-
       data.lastUpdated = new Date().toISOString();
       await saveLinksJson(data, sha);
       delete pending[userId];
@@ -140,5 +129,23 @@ async function handleMessage(msg) {
 
 bot.on('message', handleMessage);
 
-// Webhook endpoint
-app.post(`/webhook/${process.env.T
+app.post('/webhook/' + process.env.TELEGRAM_TOKEN, function(req, res) {
+  bot.processUpdate(req.body);
+  res.sendStatus(200);
+});
+
+app.get('/', function(req, res) {
+  res.send('Bot is running.');
+});
+
+app.listen(PORT, async function() {
+  console.log('Server running on port ' + PORT);
+  const webhookUrl = process.env.RAILWAY_STATIC_URL + '/webhook/' + process.env.TELEGRAM_TOKEN;
+  console.log('Setting webhook to:', webhookUrl);
+  try {
+    await bot.setWebHook(webhookUrl);
+    console.log('Webhook set successfully.');
+  } catch (err) {
+    console.error('Failed to set webhook:', err);
+  }
+});
