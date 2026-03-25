@@ -13,7 +13,14 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { polling: true });
+const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { 
+  polling: {
+    autoStart: true,
+    params: {
+      timeout: 10
+    }
+  }
+});
 console.log('Bot initialized, polling for messages...');
 const AUTHORIZED_USER = parseInt(process.env.TELEGRAM_USER_ID);
 
