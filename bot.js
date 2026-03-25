@@ -73,9 +73,12 @@ async function handleMessage(msg) {
       console.log('Attempting Cloudinary upload from URL:', fileUrl);
       const uploadResult = await cloudinary.uploader.upload(fileUrl);
       console.log('Cloudinary upload result:', uploadResult.secure_url);
-      pending[userId] = { ...pending[userId], image: uploadResult.secure_url };
+      pending[userId] = {
+        image: uploadResult.secure_url,
+        step: 'awaiting_url_after_image'
+      };
+      console.log('Pending state after image upload:', JSON.stringify(pending[userId]));
       bot.sendMessage(chatId, 'Image uploaded. Now send me the URL for this story.');
-      pending[userId].step = 'awaiting_url_after_image';
     } catch (err) {
       console.error('Cloudinary upload error:', err);
       bot.sendMessage(chatId, 'Image upload failed. Try again.');
