@@ -57,6 +57,13 @@ bot.on('message', async (msg) => {
   const text = msg.text || '';
   const photo = msg.photo;
 
+  // Cancel command
+  if (text.toLowerCase() === '/cancel' || text.toLowerCase() === 'cancel') {
+    delete pending[userId];
+    bot.sendMessage(chatId, 'Cancelled. Send a URL or image to start over.');
+    return;
+  }
+  
   // If user sends a URL
   if (text.startsWith('http')) {
     pending[userId] = { url: text, step: 'awaiting_headline' };
