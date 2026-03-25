@@ -1,0 +1,17 @@
+{
+  "lastUpdated": "2026-03-25T12:00:00Z",
+  "links": [
+    {
+      "headline": "This is your top story headline",
+      "url": "https://www.example.com"
+    },
+    {
+      "headline": "Second story goes here",
+      "url": "https://www.example.com"
+    },
+    {
+      "headline": "Third story goes here",
+      "url": "https://www.example.com"
+    }
+  ]
+}
