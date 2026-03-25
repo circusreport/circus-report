@@ -6,6 +6,8 @@ const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+app.use(express.json());
+
 // Configure Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -13,15 +15,7 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { 
-  polling: {
-    autoStart: true,
-    params: {
-      timeout: 10
-    }
-  }
-});
-console.log('Bot initialized, polling for messages...');
+const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { webHook: true });
 const AUTHORIZED_USER = parseInt(process.env.TELEGRAM_USER_ID);
 
 // Store pending submissions temporarily
@@ -50,12 +44,11 @@ async function saveLinksJson(data, sha) {
   });
 }
 
-// Step 1: User sends a URL
-bot.on('message', async (msg) => {
+// Handle incoming messages
+async function handleMessage(msg) {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
 
-  // Block anyone who isn't you
   if (userId !== AUTHORIZED_USER) {
     bot.sendMessage(chatId, 'Unauthorized.');
     return;
@@ -70,7 +63,7 @@ bot.on('message', async (msg) => {
     bot.sendMessage(chatId, 'Cancelled. Send a URL or image to start over.');
     return;
   }
-  
+
   // If user sends a URL
   if (text.startsWith('http')) {
     pending[userId] = { url: text, step: 'awaiting_headline' };
@@ -143,8 +136,9 @@ bot.on('message', async (msg) => {
   }
 
   bot.sendMessage(chatId, 'Send me a URL or an image to get started.');
-});
+}
 
-// Keep Railway happy with a health check endpoint
-app.get('/', (req, res) => res.send('Bot is running.'));
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+bot.on('message', handleMessage);
+
+// Webhook endpoint
+app.post(`/webhook/${process.env.T
