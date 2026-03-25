@@ -14,6 +14,7 @@ cloudinary.config({
 });
 
 const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { polling: true });
+console.log('Bot initialized, polling for messages...');
 const AUTHORIZED_USER = parseInt(process.env.TELEGRAM_USER_ID);
 
 // Store pending submissions temporarily
