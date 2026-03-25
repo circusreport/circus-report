@@ -65,11 +65,15 @@ async function handleMessage(msg) {
   }
 
   if (photo) {
+    console.log('Photo received from user:', userId);
     const fileId = photo[photo.length - 1].file_id;
+    console.log('File ID:', fileId);
     bot.sendMessage(chatId, 'Got the image. Uploading to Cloudinary...');
     try {
+      console.log('Getting file from Telegram...');
       const file = await bot.getFile(fileId);
-      const fileUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_TOKEN}/${file.file_path}`;
+      console.log('Got file:', JSON.stringify(file));
+      const fileUrl = 'https://api.telegram.org/file/bot' + process.env.TELEGRAM_TOKEN + '/' + file.file_path;
       console.log('Attempting Cloudinary upload from URL:', fileUrl);
       const uploadResult = await cloudinary.uploader.upload(fileUrl);
       console.log('Cloudinary upload result:', uploadResult.secure_url);
@@ -77,10 +81,10 @@ async function handleMessage(msg) {
         image: uploadResult.secure_url,
         step: 'awaiting_url_after_image'
       };
-      console.log('Pending state after image upload:', JSON.stringify(pending[userId]));
+      console.log('Pending state set to:', JSON.stringify(pending[userId]));
       bot.sendMessage(chatId, 'Image uploaded. Now send me the URL for this story.');
     } catch (err) {
-      console.error('Cloudinary upload error:', err);
+      console.error('Cloudinary upload error full:', JSON.stringify(err));
       bot.sendMessage(chatId, 'Image upload failed. Try again.');
     }
     return;
