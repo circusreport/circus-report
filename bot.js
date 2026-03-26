@@ -393,6 +393,13 @@ async function handleMessage(msg) {
     ];
     const data = await getLinks();
     data.links[pending.editIndex].headline = pending.newHeadline;
+    if ('newImage' in pending) {
+      if (pending.newImage === null) {
+        delete data.links[pending.editIndex].image;
+      } else {
+        data.links[pending.editIndex].image = pending.newImage;
+      }
+    }
     if (text.toLowerCase() !== 'keep') {
       const num = parseInt(text.trim());
       if (isNaN(num) || num < 1 || num > 10) {
