@@ -204,10 +204,14 @@
           card.className = 'image-card';
 
           if (item.image) {
+            const imgLink = document.createElement('a');
+            imgLink.href = item.url;
+            imgLink.target = '_blank';
             const img = document.createElement('img');
             img.src = item.image;
             img.alt = item.headline;
-            card.appendChild(img);
+            imgLink.appendChild(img);
+            card.appendChild(imgLink);
           } else {
             const placeholder = document.createElement('div');
             placeholder.className = 'no-image';
