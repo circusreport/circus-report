@@ -167,6 +167,22 @@ async function handleMessage(msg) {
     return;
   }
 
+  // Awaiting delete choice
+  if (pending.step === 'awaiting_delete_choice') {
+    const num = parseInt(text.trim());
+    const data = await getLinks();
+    if (isNaN(num) || num < 1 || num > data.links.length) {
+      bot.sendMessage(chatId, 'Invalid number. Reply with a number from the list, or "cancel".');
+      return;
+    }
+    const removed = data.links.splice(num - 1, 1)[0];
+    data.lastUpdated = new Date().toISOString();
+    await saveLinks(data);
+    await clearPending(userId);
+    bot.sendMessage(chatId, 'Deleted: ' + removed.headline);
+    return;
+  }
+
   // Awaiting image choice
   if (pending.step === 'awaiting_image_choice') {
     const choice = text.trim();
