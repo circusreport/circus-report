@@ -295,16 +295,55 @@ async function handleMessage(msg) {
   // Awaiting position
   if (pending.step === 'awaiting_position') {
     const makeTop = text.toLowerCase() === 'yes';
+    await savePending(userId, { ...pending, makeTop, step: 'awaiting_category' });
+    const categoryMessage = 'Choose a category:\n\n' +
+      '1. 🏦 US Politics\n' +
+      '2. 📺 News Media\n' +
+      '3. 🎭 Society & Culture\n' +
+      '4. 🏆 Sports News\n' +
+      '5. 💻 Tech News\n' +
+      '6. 🎬 Entertainment\n' +
+      '7. 🌍 World News\n' +
+      '8. 📈 Economy & Business\n' +
+      '9. ⚖️ Crime & Law\n' +
+      '10. 🧬 Health & Science\n\n' +
+      'Reply with a number.';
+    bot.sendMessage(chatId, categoryMessage);
+    return;
+  }
+
+  // Awaiting category
+  if (pending.step === 'awaiting_category') {
+    const categories = [
+      { label: 'US Politics', emoji: '🏦' },
+      { label: 'News Media', emoji: '📺' },
+      { label: 'Society & Culture', emoji: '🎭' },
+      { label: 'Sports News', emoji: '🏆' },
+      { label: 'Tech News', emoji: '💻' },
+      { label: 'Entertainment', emoji: '🎬' },
+      { label: 'World News', emoji: '🌍' },
+      { label: 'Economy & Business', emoji: '📈' },
+      { label: 'Crime & Law', emoji: '⚖️' },
+      { label: 'Health & Science', emoji: '🧬' }
+    ];
+    const num = parseInt(text.trim());
+    if (isNaN(num) || num < 1 || num > 10) {
+      bot.sendMessage(chatId, 'Please reply with a number between 1 and 10.');
+      return;
+    }
+    const chosen = categories[num - 1];
     try {
       const data = await getLinks();
       const newLink = {
         headline: pending.headline,
-        url: pending.url
+        url: pending.url,
+        category: chosen.label,
+        emoji: chosen.emoji
       };
       if (pending.image) {
         newLink.image = pending.image;
       }
-      if (makeTop) {
+      if (pending.makeTop) {
         data.links.unshift(newLink);
       } else {
         data.links.push(newLink);
@@ -316,7 +355,7 @@ async function handleMessage(msg) {
       await saveLinks(data);
       await clearPending(userId);
       console.log('Links saved successfully to Cloudflare KV');
-      bot.sendMessage(chatId, makeTop ? 'Done! Posted as top story.' : 'Done! Added to the list.');
+      bot.sendMessage(chatId, 'Done! Posted under ' + chosen.emoji + ' ' + chosen.label + '.');
     } catch (err) {
       bot.sendMessage(chatId, 'Something went wrong updating the site. Try again.');
       console.error('Error saving links:', err);
