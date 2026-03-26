@@ -193,8 +193,16 @@ async function handleMessage(msg) {
 
   // Only treat http input as a new article URL if the user isn't mid-flow on an image step
   if (text.startsWith('http')) {
-    const existingPending = await getPending(userId);
-    if (!existingPending || !IMAGE_URL_STEPS.includes(existingPending.step)) {
+    let existingStep = null;
+    let pendingFetchFailed = false;
+    try {
+      const existingPending = await getPending(userId);
+      existingStep = existingPending ? existingPending.step : null;
+    } catch (err) {
+      pendingFetchFailed = true;
+      console.log('Could not check pending state:', err.message);
+    }
+    if (!pendingFetchFailed && !IMAGE_URL_STEPS.includes(existingStep)) {
       await savePending(userId, { url: text, step: 'fetching_images' });
       bot.sendMessage(chatId, 'Got the URL. Fetching preview images...');
       const images = await fetchImages(text);
