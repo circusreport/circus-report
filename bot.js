@@ -161,6 +161,32 @@ async function handleMessage(msg) {
     return;
   }
 
+  // Awaiting edit choice
+  if (pending.step === 'awaiting_edit_choice') {
+    const num = parseInt(text.trim());
+    const data = await getLinks();
+    if (isNaN(num) || num < 1 || num > data.links.length) {
+      bot.sendMessage(chatId, 'Invalid number. Reply with a number from the list, or "cancel".');
+      return;
+    }
+    const targetLink = data.links[num - 1];
+    await savePending(userId, { step: 'awaiting_new_headline', editIndex: num - 1, oldHeadline: targetLink.headline });
+    bot.sendMessage(chatId, 'Current headline:\n"' + targetLink.headline + '"\n\nSend me the new headline.');
+    return;
+  }
+
+  // Awaiting new headline for edit
+  if (pending.step === 'awaiting_new_headline') {
+    const data = await getLinks();
+    const oldHeadline = pending.oldHeadline;
+    data.links[pending.editIndex].headline = text;
+    data.lastUpdated = new Date().toISOString();
+    await saveLinks(data);
+    await clearPending(userId);
+    bot.sendMessage(chatId, 'Updated!\n\nOld: "' + oldHeadline + '"\nNew: "' + text + '"');
+    return;
+  }
+  
   // Awaiting delete choice
   if (pending.step === 'awaiting_delete_choice') {
     const num = parseInt(text.trim());
