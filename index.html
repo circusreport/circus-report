@@ -21,16 +21,23 @@
       border-bottom: 4px solid #cc0000;
     }
 
-    header h1 {
-      font-size: 2.5em;
-      letter-spacing: 4px;
-      text-transform: uppercase;
+    header img.banner {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      margin: 0 auto;
     }
 
-    header p {
+    header p.tagline {
       font-size: 0.85em;
       color: #aaaaaa;
-      margin-top: 5px;
+      margin-top: 10px;
+    }
+
+    header p#last-updated {
+      font-size: 0.75em;
+      color: #666666;
+      margin-top: 4px;
     }
 
     .container {
@@ -39,7 +46,6 @@
       padding: 20px;
     }
 
-    /* TOP STORY */
     .top-story {
       text-align: center;
       border-bottom: 2px solid #cc0000;
@@ -67,7 +73,6 @@
 
     .top-story a:hover { text-decoration: underline; }
 
-    /* THREE IMAGE COLUMNS */
     .image-columns {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
@@ -111,7 +116,6 @@
     .image-card a:hover { text-decoration: underline; }
     .image-card a:visited { color: #551a8b; }
 
-    /* TEXT LINKS */
     .links-grid {
       columns: 2;
       column-gap: 40px;
@@ -149,7 +153,6 @@
     @media (max-width: 768px) {
       .image-columns { grid-template-columns: 1fr; }
       .links-grid { columns: 1; }
-      header h1 { font-size: 1.6em; }
       .top-story a { font-size: 1.3em; }
     }
   </style>
@@ -157,7 +160,8 @@
 <body>
 
   <header>
-    <h1>CIRCUS REPORT</h1>
+    <img class="banner" src="circusreport.svg" alt="Circus Report">
+    <p class="tagline">Making sense of the circus we call media, politics, and culture.</p>
     <p id="last-updated"></p>
   </header>
 
@@ -181,7 +185,6 @@
 
         const links = data.links;
 
-        // TOP STORY (index 0)
         if (links.length > 0) {
           const top = links[0];
           const topDiv = document.getElementById('top-story');
@@ -202,7 +205,6 @@
           topDiv.appendChild(link);
         }
 
-        // IMAGE COLUMNS (indices 1, 2, 3)
         const imageCol = document.getElementById('image-columns');
         const imagePosts = links.slice(1, 4);
         imagePosts.forEach(item => {
@@ -233,7 +235,6 @@
           imageCol.appendChild(card);
         });
 
-        // TEXT LINKS (index 4 onwards)
         const grid = document.getElementById('links-grid');
         links.slice(4).forEach(item => {
           const div = document.createElement('div');
