@@ -184,10 +184,14 @@
           const top = links[0];
           const topDiv = document.getElementById('top-story');
           if (top.image) {
+            const imgLink = document.createElement('a');
+            imgLink.href = top.url;
+            imgLink.target = '_blank';
             const img = document.createElement('img');
             img.src = top.image;
             img.alt = top.headline;
-            topDiv.appendChild(img);
+            imgLink.appendChild(img);
+            topDiv.appendChild(imgLink);
           }
           const link = document.createElement('a');
           link.href = top.url;
