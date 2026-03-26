@@ -171,12 +171,23 @@ async function handleMessage(msg) {
     }
     const targetLink = data.links[num - 1];
     await savePending(userId, { step: 'awaiting_new_headline', editIndex: num - 1, oldHeadline: targetLink.headline });
-    bot.sendMessage(chatId, 'Current headline:\n"' + targetLink.headline + '"\n\nSend me the new headline.');
-    return;
+    bot.sendMessage(chatId, 'Current headline:\n"' + targetLink.headline + '"\n\nSend me the new headline, or reply "keep" to leave it unchanged.');    return;
   }
 
   // Awaiting new headline for edit
   if (pending.step === 'awaiting_new_headline') {
+    if (text.toLowerCase() === 'keep') {
+      await savePending(userId, { ...pending, newHeadline: pending.oldHeadline, step: 'awaiting_edit_image_choice' });
+      const data = await getLinks();
+      const currentImage = data.links[pending.editIndex].image;
+      const current = currentImage ? 'Yes (image set)' : 'None';
+      bot.sendMessage(chatId, 'Headline kept. Now what do you want to do with the image? (current: ' + current + ')\n\n' +
+        '"keep" - Keep current image\n' +
+        '"fetch" - Fetch new images from the URL\n' +
+        '"upload" - Upload your own image\n' +
+        '"remove" - Remove image entirely');
+      return;
+    }
     await savePending(userId, { ...pending, newHeadline: text, step: 'awaiting_edit_confirm' });
     bot.sendMessage(chatId, 'Are you sure you want to change:\n\nFrom: "' + pending.oldHeadline + '"\nTo: "' + text + '"\n\nReply "yes" to confirm or "cancel" to go back.');
     return;
