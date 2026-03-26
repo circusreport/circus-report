@@ -19,6 +19,7 @@ const AUTHORIZED_USER = parseInt(process.env.TELEGRAM_USER_ID);
 
 const pending = {};
 
+console.log('CLOUDFLARE_WORKER_URL value:', process.env.CLOUDFLARE_WORKER_URL);
 async function getLinks() {
   const response = await axios.get(process.env.CLOUDFLARE_WORKER_URL, {
     headers: { Authorization: 'Bearer ' + process.env.BOT_SECRET }
