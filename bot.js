@@ -177,13 +177,24 @@ async function handleMessage(msg) {
 
   // Awaiting new headline for edit
   if (pending.step === 'awaiting_new_headline') {
-    const data = await getLinks();
-    const oldHeadline = pending.oldHeadline;
-    data.links[pending.editIndex].headline = text;
-    data.lastUpdated = new Date().toISOString();
-    await saveLinks(data);
-    await clearPending(userId);
-    bot.sendMessage(chatId, 'Updated!\n\nOld: "' + oldHeadline + '"\nNew: "' + text + '"');
+    await savePending(userId, { ...pending, newHeadline: text, step: 'awaiting_edit_confirm' });
+    bot.sendMessage(chatId, 'Are you sure you want to change:\n\nFrom: "' + pending.oldHeadline + '"\nTo: "' + text + '"\n\nReply "yes" to confirm or "cancel" to go back.');
+    return;
+  }
+
+  // Awaiting edit confirmation
+  if (pending.step === 'awaiting_edit_confirm') {
+    if (text.toLowerCase() === 'yes') {
+      const data = await getLinks();
+      data.links[pending.editIndex].headline = pending.newHeadline;
+      data.lastUpdated = new Date().toISOString();
+      await saveLinks(data);
+      await clearPending(userId);
+      bot.sendMessage(chatId, 'Updated!\n\nOld: "' + pending.oldHeadline + '"\nNew: "' + pending.newHeadline + '"');
+    } else {
+      await clearPending(userId);
+      bot.sendMessage(chatId, 'Cancelled. Headline was not changed.');
+    }
     return;
   }
   
