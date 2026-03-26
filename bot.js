@@ -109,6 +109,23 @@ async function handleMessage(msg) {
     return;
   }
 
+  // Edit command
+  if (text.toLowerCase() === 'edit' || text.toLowerCase() === '/edit') {
+    const data = await getLinks();
+    if (!data.links || data.links.length === 0) {
+      bot.sendMessage(chatId, 'No links to edit.');
+      return;
+    }
+    await savePending(userId, { step: 'awaiting_edit_choice' });
+    let message = 'Which headline do you want to edit?\n\n';
+    data.links.forEach((link, i) => {
+      message += (i + 1) + '. ' + link.headline + '\n';
+    });
+    message += '\nReply with a number, or "cancel" to go back.';
+    bot.sendMessage(chatId, message);
+    return;
+  }
+  
   // Delete command
   if (text.toLowerCase() === 'delete' || text.toLowerCase() === '/delete') {
     const data = await getLinks();
