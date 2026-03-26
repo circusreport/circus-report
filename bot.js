@@ -2,6 +2,8 @@ const TelegramBot = require('node-telegram-bot-api');
 const cloudinary = require('cloudinary').v2;
 const axios = require('axios');
 const express = require('express');
+const ogs = require('open-graph-scraper');
+const cheerio = require('cheerio');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -46,6 +48,55 @@ async function clearPending(userId) {
   await axios.delete(WORKER_BASE + '/pending/' + userId, { headers: AUTH_HEADER });
 }
 
+async function fetchImages(url) {
+  const images = [];
+  try {
+    const { result } = await ogs({ url });
+    if (result.ogImage) {
+      const ogImages = Array.isArray(result.ogImage) ? result.ogImage : [result.ogImage];
+      ogImages.forEach(img => {
+        const imgUrl = typeof img === 'string' ? img : img.url;
+        if (imgUrl && !images.includes(imgUrl)) images.push(imgUrl);
+      });
+    }
+    if (result.twitterImage) {
+      const twitterImages = Array.isArray(result.twitterImage) ? result.twitterImage : [result.twitterImage];
+      twitterImages.forEach(img => {
+        const imgUrl = typeof img === 'string' ? img : img.url;
+        if (imgUrl && !images.includes(imgUrl)) images.push(imgUrl);
+      });
+    }
+  } catch (err) {
+    console.log('OGS fetch error:', err.message);
+  }
+  return images.slice(0, 3);
+}
+
+async function presentImages(chatId, userId, images, pending) {
+  if (images.length === 0) {
+    await savePending(userId, { ...pending, step: 'awaiting_custom_image' });
+    bot.sendMessage(chatId, 'No preview images found for this URL.\n\nSend me an image to upload, or reply "skip" to use no image.');
+    return;
+  }
+
+  await savePending(userId, { ...pending, availableImages: images, step: 'awaiting_image_choice' });
+
+  for (let i = 0; i < images.length; i++) {
+    try {
+      await bot.sendPhoto(chatId, images[i], { caption: 'Option ' + (i + 1) });
+    } catch (err) {
+      console.log('Could not send image ' + (i + 1) + ':', err.message);
+    }
+  }
+
+  let message = 'Reply with a number to choose an image:\n';
+  for (let i = 0; i < images.length; i++) {
+    message += (i + 1) + ' - Use this image\n';
+  }
+  message += '\nOr reply:\n"upload" - Upload your own image\n"skip" - No image';
+  bot.sendMessage(chatId, message);
+}
+
 async function handleMessage(msg) {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
@@ -58,44 +109,20 @@ async function handleMessage(msg) {
   const text = msg.text || '';
   const photo = msg.photo;
 
+  // Cancel command
   if (text.toLowerCase() === '/cancel' || text.toLowerCase() === 'cancel') {
     await clearPending(userId);
-    bot.sendMessage(chatId, 'Cancelled. Send a URL or image to start over.');
+    bot.sendMessage(chatId, 'Cancelled. Send a URL to get started.');
     return;
   }
 
+  // New URL submission
   if (text.startsWith('http')) {
-    const existing = await getPending(userId);
-    const newPending = { 
-      url: text, 
-      step: 'awaiting_headline',
-      ...(existing && existing.image && { image: existing.image })
-    };
-    await savePending(userId, newPending);
-    bot.sendMessage(chatId, 'Got the URL. Now send me the headline.');
-    return;
-  }
-
-  if (photo) {
-    console.log('Photo received from user:', userId);
-    const fileId = photo[photo.length - 1].file_id;
-    bot.sendMessage(chatId, 'Got the image. Uploading to Cloudinary...');
-    try {
-      const file = await bot.getFile(fileId);
-      const fileUrl = 'https://api.telegram.org/file/bot' + process.env.TELEGRAM_TOKEN + '/' + file.file_path;
-      console.log('Attempting Cloudinary upload from URL:', fileUrl);
-      const uploadResult = await cloudinary.uploader.upload(fileUrl);
-      console.log('Cloudinary upload result:', uploadResult.secure_url);
-      await savePending(userId, {
-        image: uploadResult.secure_url,
-        step: 'awaiting_url_after_image'
-      });
-      console.log('Pending state saved to KV');
-      bot.sendMessage(chatId, 'Image uploaded. Now send me the URL for this story.');
-    } catch (err) {
-      console.error('Cloudinary upload error:', err);
-      bot.sendMessage(chatId, 'Image upload failed. Try again.');
-    }
+    await savePending(userId, { url: text, step: 'fetching_images' });
+    bot.sendMessage(chatId, 'Got the URL. Fetching preview images...');
+    const images = await fetchImages(text);
+    const pending = await getPending(userId);
+    await presentImages(chatId, userId, images, pending);
     return;
   }
 
@@ -103,22 +130,75 @@ async function handleMessage(msg) {
   console.log('Retrieved pending state:', JSON.stringify(pending));
 
   if (!pending) {
-    bot.sendMessage(chatId, 'Send me a URL or an image to get started.');
+    bot.sendMessage(chatId, 'Send me a URL to get started.');
     return;
   }
 
+  // Awaiting image choice
+  if (pending.step === 'awaiting_image_choice') {
+    const choice = text.trim();
+
+    if (choice === 'skip') {
+      await savePending(userId, { ...pending, image: null, step: 'awaiting_headline' });
+      bot.sendMessage(chatId, 'No image. Now send me the headline.');
+      return;
+    }
+
+    if (choice === 'upload') {
+      await savePending(userId, { ...pending, step: 'awaiting_custom_image' });
+      bot.sendMessage(chatId, 'Send me the image you want to upload.');
+      return;
+    }
+
+    const num = parseInt(choice);
+    if (!isNaN(num) && num >= 1 && num <= pending.availableImages.length) {
+      const chosenImage = pending.availableImages[num - 1];
+      await savePending(userId, { ...pending, image: chosenImage, step: 'awaiting_headline' });
+      bot.sendMessage(chatId, 'Image selected. Now send me the headline.');
+      return;
+    }
+
+    bot.sendMessage(chatId, 'Please reply with a number, "upload", or "skip".');
+    return;
+  }
+
+  // Awaiting custom image upload
+  if (pending.step === 'awaiting_custom_image') {
+    if (text.toLowerCase() === 'skip') {
+      await savePending(userId, { ...pending, image: null, step: 'awaiting_headline' });
+      bot.sendMessage(chatId, 'No image. Now send me the headline.');
+      return;
+    }
+
+    if (photo) {
+      const fileId = photo[photo.length - 1].file_id;
+      bot.sendMessage(chatId, 'Uploading your image to Cloudinary...');
+      try {
+        const file = await bot.getFile(fileId);
+        const fileUrl = 'https://api.telegram.org/file/bot' + process.env.TELEGRAM_TOKEN + '/' + file.file_path;
+        const uploadResult = await cloudinary.uploader.upload(fileUrl);
+        console.log('Cloudinary upload result:', uploadResult.secure_url);
+        await savePending(userId, { ...pending, image: uploadResult.secure_url, step: 'awaiting_headline' });
+        bot.sendMessage(chatId, 'Image uploaded. Now send me the headline.');
+      } catch (err) {
+        console.error('Cloudinary upload error:', err);
+        bot.sendMessage(chatId, 'Image upload failed. Try again or reply "skip".');
+      }
+      return;
+    }
+
+    bot.sendMessage(chatId, 'Please send an image or reply "skip".');
+    return;
+  }
+
+  // Awaiting headline
   if (pending.step === 'awaiting_headline') {
     await savePending(userId, { ...pending, headline: text, step: 'awaiting_position' });
     bot.sendMessage(chatId, 'Make this the top story? Reply yes or no.');
     return;
   }
 
-  if (pending.step === 'awaiting_url_after_image') {
-    await savePending(userId, { ...pending, url: text, step: 'awaiting_headline' });
-    bot.sendMessage(chatId, 'Got it. Now send me the headline.');
-    return;
-  }
-
+  // Awaiting position
   if (pending.step === 'awaiting_position') {
     const makeTop = text.toLowerCase() === 'yes';
     try {
@@ -147,7 +227,7 @@ async function handleMessage(msg) {
     return;
   }
 
-  bot.sendMessage(chatId, 'Send me a URL or an image to get started.');
+  bot.sendMessage(chatId, 'Send me a URL to get started.');
 }
 
 bot.on('message', handleMessage);
