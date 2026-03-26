@@ -255,6 +255,9 @@ async function handleMessage(msg) {
       } else {
         data.links.push(newLink);
       }
+      if (data.links.length > 50) {
+        data.links = data.links.slice(0, 50);
+      }
       data.lastUpdated = new Date().toISOString();
       await saveLinks(data);
       await clearPending(userId);
