@@ -185,16 +185,61 @@ async function handleMessage(msg) {
   // Awaiting edit confirmation
   if (pending.step === 'awaiting_edit_confirm') {
     if (text.toLowerCase() === 'yes') {
+      await savePending(userId, { ...pending, step: 'awaiting_edit_category' });
       const data = await getLinks();
-      data.links[pending.editIndex].headline = pending.newHeadline;
-      data.lastUpdated = new Date().toISOString();
-      await saveLinks(data);
-      await clearPending(userId);
-      bot.sendMessage(chatId, 'Updated!\n\nOld: "' + pending.oldHeadline + '"\nNew: "' + pending.newHeadline + '"');
+      const currentCategory = data.links[pending.editIndex].category;
+      const currentEmoji = data.links[pending.editIndex].emoji;
+      const current = currentCategory ? currentEmoji + ' ' + currentCategory : 'None';
+      const categoryMessage = 'Headline updated. Now choose a category (current: ' + current + '):\n\n' +
+        '1. 🏦 US Politics\n' +
+        '2. 📺 News Media\n' +
+        '3. 🎭 Society & Culture\n' +
+        '4. 🏆 Sports News\n' +
+        '5. 💻 Tech News\n' +
+        '6. 🎬 Entertainment\n' +
+        '7. 🌍 World News\n' +
+        '8. 📈 Economy & Business\n' +
+        '9. ⚖️ Crime & Law\n' +
+        '10. 🧬 Health & Science\n\n' +
+        'Reply with a number, or "keep" to leave it unchanged.';
+      bot.sendMessage(chatId, categoryMessage);
     } else {
       await clearPending(userId);
       bot.sendMessage(chatId, 'Cancelled. Headline was not changed.');
     }
+    return;
+  }
+
+  // Awaiting edit category
+  if (pending.step === 'awaiting_edit_category') {
+    const categories = [
+      { label: 'US Politics', emoji: '🏦' },
+      { label: 'News Media', emoji: '📺' },
+      { label: 'Society & Culture', emoji: '🎭' },
+      { label: 'Sports News', emoji: '🏆' },
+      { label: 'Tech News', emoji: '💻' },
+      { label: 'Entertainment', emoji: '🎬' },
+      { label: 'World News', emoji: '🌍' },
+      { label: 'Economy & Business', emoji: '📈' },
+      { label: 'Crime & Law', emoji: '⚖️' },
+      { label: 'Health & Science', emoji: '🧬' }
+    ];
+    const data = await getLinks();
+    data.links[pending.editIndex].headline = pending.newHeadline;
+    if (text.toLowerCase() !== 'keep') {
+      const num = parseInt(text.trim());
+      if (isNaN(num) || num < 1 || num > 10) {
+        bot.sendMessage(chatId, 'Please reply with a number between 1 and 10, or "keep".');
+        return;
+      }
+      const chosen = categories[num - 1];
+      data.links[pending.editIndex].category = chosen.label;
+      data.links[pending.editIndex].emoji = chosen.emoji;
+    }
+    data.lastUpdated = new Date().toISOString();
+    await saveLinks(data);
+    await clearPending(userId);
+    bot.sendMessage(chatId, 'Updated!\n\nOld: "' + pending.oldHeadline + '"\nNew: "' + pending.newHeadline + '"');
     return;
   }
   
