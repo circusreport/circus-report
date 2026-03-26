@@ -19,24 +19,19 @@ const AUTHORIZED_USER = parseInt(process.env.TELEGRAM_USER_ID);
 
 const pending = {};
 
-async function getLinksJson() {
-  const url = `https://api.github.com/repos/${process.env.GITHUB_USERNAME}/${process.env.GITHUB_REPO}/contents/links.json`;
-  const response = await axios.get(url, {
-    headers: { Authorization: `token ${process.env.GITHUB_TOKEN}` }
+async function getLinks() {
+  const response = await axios.get(process.env.CLOUDFLARE_WORKER_URL, {
+    headers: { Authorization: 'Bearer ' + process.env.BOT_SECRET }
   });
-  const content = Buffer.from(response.data.content, 'base64').toString('utf8');
-  return { data: JSON.parse(content), sha: response.data.sha };
+  return response.data;
 }
 
-async function saveLinksJson(data, sha) {
-  const url = `https://api.github.com/repos/${process.env.GITHUB_USERNAME}/${process.env.GITHUB_REPO}/contents/links.json`;
-  const content = Buffer.from(JSON.stringify(data, null, 2)).toString('base64');
-  await axios.put(url, {
-    message: 'Update links via bot',
-    content,
-    sha
-  }, {
-    headers: { Authorization: `token ${process.env.GITHUB_TOKEN}` }
+async function saveLinks(data) {
+  await axios.post(process.env.CLOUDFLARE_WORKER_URL, data, {
+    headers: {
+      Authorization: 'Bearer ' + process.env.BOT_SECRET,
+      'Content-Type': 'application/json'
+    }
   });
 }
 
@@ -67,12 +62,9 @@ async function handleMessage(msg) {
   if (photo) {
     console.log('Photo received from user:', userId);
     const fileId = photo[photo.length - 1].file_id;
-    console.log('File ID:', fileId);
     bot.sendMessage(chatId, 'Got the image. Uploading to Cloudinary...');
     try {
-      console.log('Getting file from Telegram...');
       const file = await bot.getFile(fileId);
-      console.log('Got file:', JSON.stringify(file));
       const fileUrl = 'https://api.telegram.org/file/bot' + process.env.TELEGRAM_TOKEN + '/' + file.file_path;
       console.log('Attempting Cloudinary upload from URL:', fileUrl);
       const uploadResult = await cloudinary.uploader.upload(fileUrl);
@@ -84,7 +76,7 @@ async function handleMessage(msg) {
       console.log('Pending state set to:', JSON.stringify(pending[userId]));
       bot.sendMessage(chatId, 'Image uploaded. Now send me the URL for this story.');
     } catch (err) {
-      console.error('Cloudinary upload error full:', JSON.stringify(err));
+      console.error('Cloudinary upload error:', err);
       bot.sendMessage(chatId, 'Image upload failed. Try again.');
     }
     return;
@@ -107,7 +99,7 @@ async function handleMessage(msg) {
   if (pending[userId] && pending[userId].step === 'awaiting_position') {
     const makeTop = text.toLowerCase() === 'yes';
     try {
-      const { data, sha } = await getLinksJson();
+      const data = await getLinks();
       const newLink = {
         headline: pending[userId].headline,
         url: pending[userId].url
@@ -121,12 +113,13 @@ async function handleMessage(msg) {
         data.links.push(newLink);
       }
       data.lastUpdated = new Date().toISOString();
-      await saveLinksJson(data, sha);
+      await saveLinks(data);
       delete pending[userId];
+      console.log('Links saved successfully to Cloudflare KV');
       bot.sendMessage(chatId, makeTop ? 'Done! Posted as top story.' : 'Done! Added to the list.');
     } catch (err) {
       bot.sendMessage(chatId, 'Something went wrong updating the site. Try again.');
-      console.error(err);
+      console.error('Error saving links:', err);
     }
     return;
   }
