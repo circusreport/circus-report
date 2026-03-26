@@ -2,7 +2,6 @@ const TelegramBot = require('node-telegram-bot-api');
 const cloudinary = require('cloudinary').v2;
 const axios = require('axios');
 const express = require('express');
-const ogs = require('open-graph-scraper');
 const cheerio = require('cheerio');
 
 const app = express();
@@ -51,23 +50,17 @@ async function clearPending(userId) {
 async function fetchImages(url) {
   const images = [];
   try {
-    const { result } = await ogs({ url });
-    if (result.ogImage) {
-      const ogImages = Array.isArray(result.ogImage) ? result.ogImage : [result.ogImage];
-      ogImages.forEach(img => {
-        const imgUrl = typeof img === 'string' ? img : img.url;
-        if (imgUrl && !images.includes(imgUrl)) images.push(imgUrl);
-      });
-    }
-    if (result.twitterImage) {
-      const twitterImages = Array.isArray(result.twitterImage) ? result.twitterImage : [result.twitterImage];
-      twitterImages.forEach(img => {
-        const imgUrl = typeof img === 'string' ? img : img.url;
-        if (imgUrl && !images.includes(imgUrl)) images.push(imgUrl);
-      });
-    }
+    const response = await axios.get(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' },
+      timeout: 10000
+    });
+    const $ = cheerio.load(response.data);
+    const og = $('meta[property="og:image"]').attr('content');
+    const twitter = $('meta[name="twitter:image"]').attr('content');
+    if (og && !images.includes(og)) images.push(og);
+    if (twitter && !images.includes(twitter)) images.push(twitter);
   } catch (err) {
-    console.log('OGS fetch error:', err.message);
+    console.log('Image fetch error:', err.message);
   }
   return images.slice(0, 3);
 }
@@ -116,7 +109,7 @@ async function handleMessage(msg) {
     return;
   }
 
-// Delete command
+  // Delete command
   if (text.toLowerCase() === 'delete' || text.toLowerCase() === '/delete') {
     const data = await getLinks();
     if (!data.links || data.links.length === 0) {
@@ -133,22 +126,6 @@ async function handleMessage(msg) {
     return;
   }
 
-  // Awaiting delete choice
-  if (pending && pending.step === 'awaiting_delete_choice') {
-    const num = parseInt(text.trim());
-    const data = await getLinks();
-    if (isNaN(num) || num < 1 || num > data.links.length) {
-      bot.sendMessage(chatId, 'Invalid number. Reply with a number from the list, or "cancel".');
-      return;
-    }
-    const removed = data.links.splice(num - 1, 1)[0];
-    data.lastUpdated = new Date().toISOString();
-    await saveLinks(data);
-    await clearPending(userId);
-    bot.sendMessage(chatId, 'Deleted: ' + removed.headline);
-    return;
-  }
-  
   // New URL submission
   if (text.startsWith('http')) {
     await savePending(userId, { url: text, step: 'fetching_images' });
