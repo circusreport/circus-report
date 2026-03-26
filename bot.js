@@ -17,23 +17,33 @@ cloudinary.config({
 const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { webHook: true });
 const AUTHORIZED_USER = parseInt(process.env.TELEGRAM_USER_ID);
 
-const pending = {};
+const WORKER_BASE = process.env.CLOUDFLARE_WORKER_URL.replace('/links', '');
+const AUTH_HEADER = { Authorization: 'Bearer ' + process.env.BOT_SECRET };
 
-console.log('CLOUDFLARE_WORKER_URL value:', process.env.CLOUDFLARE_WORKER_URL);
 async function getLinks() {
-  const response = await axios.get(process.env.CLOUDFLARE_WORKER_URL, {
-    headers: { Authorization: 'Bearer ' + process.env.BOT_SECRET }
-  });
+  const response = await axios.get(WORKER_BASE + '/links', { headers: AUTH_HEADER });
   return response.data;
 }
 
 async function saveLinks(data) {
-  await axios.post(process.env.CLOUDFLARE_WORKER_URL, data, {
-    headers: {
-      Authorization: 'Bearer ' + process.env.BOT_SECRET,
-      'Content-Type': 'application/json'
-    }
+  await axios.post(WORKER_BASE + '/links', data, {
+    headers: { ...AUTH_HEADER, 'Content-Type': 'application/json' }
   });
+}
+
+async function getPending(userId) {
+  const response = await axios.get(WORKER_BASE + '/pending/' + userId, { headers: AUTH_HEADER });
+  return response.data;
+}
+
+async function savePending(userId, data) {
+  await axios.post(WORKER_BASE + '/pending/' + userId, data, {
+    headers: { ...AUTH_HEADER, 'Content-Type': 'application/json' }
+  });
+}
+
+async function clearPending(userId) {
+  await axios.delete(WORKER_BASE + '/pending/' + userId, { headers: AUTH_HEADER });
 }
 
 async function handleMessage(msg) {
@@ -49,13 +59,13 @@ async function handleMessage(msg) {
   const photo = msg.photo;
 
   if (text.toLowerCase() === '/cancel' || text.toLowerCase() === 'cancel') {
-    delete pending[userId];
+    await clearPending(userId);
     bot.sendMessage(chatId, 'Cancelled. Send a URL or image to start over.');
     return;
   }
 
   if (text.startsWith('http')) {
-    pending[userId] = { url: text, step: 'awaiting_headline' };
+    await savePending(userId, { url: text, step: 'awaiting_headline' });
     bot.sendMessage(chatId, 'Got the URL. Now send me the headline.');
     return;
   }
@@ -70,11 +80,11 @@ async function handleMessage(msg) {
       console.log('Attempting Cloudinary upload from URL:', fileUrl);
       const uploadResult = await cloudinary.uploader.upload(fileUrl);
       console.log('Cloudinary upload result:', uploadResult.secure_url);
-      pending[userId] = {
+      await savePending(userId, {
         image: uploadResult.secure_url,
         step: 'awaiting_url_after_image'
-      };
-      console.log('Pending state set to:', JSON.stringify(pending[userId]));
+      });
+      console.log('Pending state saved to KV');
       bot.sendMessage(chatId, 'Image uploaded. Now send me the URL for this story.');
     } catch (err) {
       console.error('Cloudinary upload error:', err);
@@ -83,31 +93,36 @@ async function handleMessage(msg) {
     return;
   }
 
-  if (pending[userId] && pending[userId].step === 'awaiting_url_after_image') {
-    pending[userId].url = text;
-    pending[userId].step = 'awaiting_headline';
-    console.log('Pending after URL added:', JSON.stringify(pending[userId]));
+  const pending = await getPending(userId);
+  console.log('Retrieved pending state:', JSON.stringify(pending));
+
+  if (!pending) {
+    bot.sendMessage(chatId, 'Send me a URL or an image to get started.');
+    return;
+  }
+
+  if (pending.step === 'awaiting_headline') {
+    await savePending(userId, { ...pending, headline: text, step: 'awaiting_position' });
+    bot.sendMessage(chatId, 'Make this the top story? Reply yes or no.');
+    return;
+  }
+
+  if (pending.step === 'awaiting_url_after_image') {
+    await savePending(userId, { ...pending, url: text, step: 'awaiting_headline' });
     bot.sendMessage(chatId, 'Got it. Now send me the headline.');
     return;
   }
 
-  if (pending[userId] && pending[userId].step === 'awaiting_url_after_image') {
-    pending[userId].url = text;
-    pending[userId].step = 'awaiting_headline';
-    bot.sendMessage(chatId, 'Got it. Now send me the headline.');
-    return;
-  }
-
-  if (pending[userId] && pending[userId].step === 'awaiting_position') {
+  if (pending.step === 'awaiting_position') {
     const makeTop = text.toLowerCase() === 'yes';
     try {
       const data = await getLinks();
       const newLink = {
-        headline: pending[userId].headline,
-        url: pending[userId].url
+        headline: pending.headline,
+        url: pending.url
       };
-      if (pending[userId].image) {
-        newLink.image = pending[userId].image;
+      if (pending.image) {
+        newLink.image = pending.image;
       }
       if (makeTop) {
         data.links.unshift(newLink);
@@ -116,7 +131,7 @@ async function handleMessage(msg) {
       }
       data.lastUpdated = new Date().toISOString();
       await saveLinks(data);
-      delete pending[userId];
+      await clearPending(userId);
       console.log('Links saved successfully to Cloudflare KV');
       bot.sendMessage(chatId, makeTop ? 'Done! Posted as top story.' : 'Done! Added to the list.');
     } catch (err) {
