@@ -116,6 +116,39 @@ async function handleMessage(msg) {
     return;
   }
 
+// Delete command
+  if (text.toLowerCase() === 'delete' || text.toLowerCase() === '/delete') {
+    const data = await getLinks();
+    if (!data.links || data.links.length === 0) {
+      bot.sendMessage(chatId, 'No links to delete.');
+      return;
+    }
+    await savePending(userId, { step: 'awaiting_delete_choice' });
+    let message = 'Which link do you want to delete?\n\n';
+    data.links.forEach((link, i) => {
+      message += (i + 1) + '. ' + link.headline + '\n';
+    });
+    message += '\nReply with a number, or "cancel" to go back.';
+    bot.sendMessage(chatId, message);
+    return;
+  }
+
+  // Awaiting delete choice
+  if (pending && pending.step === 'awaiting_delete_choice') {
+    const num = parseInt(text.trim());
+    const data = await getLinks();
+    if (isNaN(num) || num < 1 || num > data.links.length) {
+      bot.sendMessage(chatId, 'Invalid number. Reply with a number from the list, or "cancel".');
+      return;
+    }
+    const removed = data.links.splice(num - 1, 1)[0];
+    data.lastUpdated = new Date().toISOString();
+    await saveLinks(data);
+    await clearPending(userId);
+    bot.sendMessage(chatId, 'Deleted: ' + removed.headline);
+    return;
+  }
+  
   // New URL submission
   if (text.startsWith('http')) {
     await savePending(userId, { url: text, step: 'fetching_images' });
