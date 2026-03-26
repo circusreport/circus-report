@@ -496,13 +496,17 @@ async function handleMessage(msg) {
 
   if (pending.step === 'awaiting_headline') {
     await savePending(userId, { ...pending, headline: text, step: 'awaiting_position' });
-    bot.sendMessage(chatId, 'Make this the top story? Reply yes or no.');
+    bot.sendMessage(chatId, 'Where do you want to place this?\n\n"yes" - Top Headline\n"1" - Sub-Headlines (image row)\n"2" - Link Only Headlines');
     return;
   }
 
   if (pending.step === 'awaiting_position') {
-    const makeTop = text.toLowerCase() === 'yes';
-    await savePending(userId, { ...pending, makeTop, step: 'awaiting_category' });
+    const choice = text.trim().toLowerCase();
+    if (choice !== 'yes' && choice !== '1' && choice !== '2') {
+      bot.sendMessage(chatId, 'Please reply "yes" (Top Headline), "1" (Sub-Headlines), or "2" (Link Only Headlines).');
+      return;
+    }
+    await savePending(userId, { ...pending, position: choice, step: 'awaiting_category' });
     bot.sendMessage(chatId, CATEGORY_MESSAGE);
     return;
   }
@@ -525,10 +529,18 @@ async function handleMessage(msg) {
       if (pending.image) {
         newLink.image = pending.image;
       }
-      if (pending.makeTop) {
+      if (pending.position === 'yes') {
+        // Top Headline — insert at front
         data.links.unshift(newLink);
+      } else if (pending.position === '1') {
+        // Sub-Headlines — insert at index 1 (right after top story)
+        // If there are already 3 sub-headlines (indices 1-3), the one at index 3
+        // gets pushed to index 4 automatically by splice, becoming first Link Only
+        data.links.splice(1, 0, newLink);
       } else {
-        data.links.push(newLink);
+        // Link Only Headlines — insert at index 4 (first text link slot)
+        const insertAt = Math.min(4, data.links.length);
+        data.links.splice(insertAt, 0, newLink);
       }
       if (data.links.length > 50) {
         data.links = data.links.slice(0, 50);
@@ -537,7 +549,8 @@ async function handleMessage(msg) {
       await saveLinks(data);
       await clearPending(userId);
       console.log('Links saved successfully to Cloudflare KV');
-      bot.sendMessage(chatId, (pending.makeTop ? 'Done! Posted as top story.' : 'Done! Added to the list.') + READY);
+      const sectionName = pending.position === 'yes' ? 'Top Headline' : pending.position === '1' ? 'Sub-Headlines' : 'Link Only Headlines';
+      bot.sendMessage(chatId, 'Done! Added to ' + sectionName + '.' + READY);
     } catch (err) {
       bot.sendMessage(chatId, 'Something went wrong updating the site. Try again.');
       console.error('Error saving links:', err);
