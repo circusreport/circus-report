@@ -238,7 +238,8 @@
         links.slice(4).forEach(item => {
           const div = document.createElement('div');
           div.className = 'link-item';
-          div.innerHTML = '<a href="' + item.url + '" target="_blank">&#9654; ' + item.headline + '</a>';
+          const prefix = item.emoji ? item.emoji : '&#9654;';
+          div.innerHTML = '<a href="' + item.url + '" target="_blank">' + prefix + ' ' + item.headline + '</a>';
           grid.appendChild(div);
         });
       })
