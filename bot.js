@@ -83,10 +83,11 @@ async function handleMessage(msg) {
     return;
   }
 
-  if (pending[userId] && pending[userId].step === 'awaiting_headline') {
-    pending[userId].headline = text;
-    pending[userId].step = 'awaiting_position';
-    bot.sendMessage(chatId, 'Make this the top story? Reply yes or no.');
+  if (pending[userId] && pending[userId].step === 'awaiting_url_after_image') {
+    pending[userId].url = text;
+    pending[userId].step = 'awaiting_headline';
+    console.log('Pending after URL added:', JSON.stringify(pending[userId]));
+    bot.sendMessage(chatId, 'Got it. Now send me the headline.');
     return;
   }
 
