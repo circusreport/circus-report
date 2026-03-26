@@ -65,7 +65,13 @@ async function handleMessage(msg) {
   }
 
   if (text.startsWith('http')) {
-    await savePending(userId, { url: text, step: 'awaiting_headline' });
+    const existing = await getPending(userId);
+    const newPending = { 
+      url: text, 
+      step: 'awaiting_headline',
+      ...(existing && existing.image && { image: existing.image })
+    };
+    await savePending(userId, newPending);
     bot.sendMessage(chatId, 'Got the URL. Now send me the headline.');
     return;
   }
