@@ -152,11 +152,25 @@ async function handleMessage(msg) {
       bot.sendMessage(chatId, 'Invalid number. Reply with a number from the list, or "cancel".');
       return;
     }
-    const removed = data.links.splice(num - 1, 1)[0];
-    data.lastUpdated = new Date().toISOString();
-    await saveLinks(data);
-    await clearPending(userId);
-    bot.sendMessage(chatId, 'Deleted: ' + removed.headline);
+    const targetLink = data.links[num - 1];
+    await savePending(userId, { step: 'awaiting_delete_confirm', deleteIndex: num - 1, headline: targetLink.headline });
+    bot.sendMessage(chatId, 'Are you sure you want to delete:\n\n"' + targetLink.headline + '"\n\nReply "yes" to confirm or "cancel" to go back.');
+    return;
+  }
+
+  // Awaiting delete confirmation
+  if (pending.step === 'awaiting_delete_confirm') {
+    if (text.toLowerCase() === 'yes') {
+      const data = await getLinks();
+      const removed = data.links.splice(pending.deleteIndex, 1)[0];
+      data.lastUpdated = new Date().toISOString();
+      await saveLinks(data);
+      await clearPending(userId);
+      bot.sendMessage(chatId, 'Deleted: ' + removed.headline);
+    } else {
+      await clearPending(userId);
+      bot.sendMessage(chatId, 'Cancelled. Nothing was deleted.');
+    }
     return;
   }
 
