@@ -49,6 +49,9 @@ const CATEGORY_MESSAGE = 'Choose a category:\n\n' +
 
 const READY = '\n\nReady for next command.';
 
+// Steps where the user may legitimately paste an image URL (not a new article URL)
+const IMAGE_URL_STEPS = ['awaiting_custom_image', 'awaiting_edit_custom_image'];
+
 async function getLinks() {
   const response = await axios.get(WORKER_BASE + '/links', { headers: AUTH_HEADER });
   return response.data;
@@ -96,7 +99,7 @@ async function fetchImages(url) {
 async function presentImages(chatId, userId, images, pending) {
   if (images.length === 0) {
     await savePending(userId, { ...pending, step: 'awaiting_custom_image' });
-    bot.sendMessage(chatId, 'No preview images found for this URL.\n\nSend me an image to upload, or reply "skip" to use no image.');
+    bot.sendMessage(chatId, 'No preview images found for this URL.\n\nSend me an image file, paste a direct image URL, or reply "skip" to use no image.');
     return;
   }
   await savePending(userId, { ...pending, availableImages: images, step: 'awaiting_image_choice' });
@@ -111,7 +114,7 @@ async function presentImages(chatId, userId, images, pending) {
   for (let i = 0; i < images.length; i++) {
     message += (i + 1) + ' - Use this image\n';
   }
-  message += '\nOr reply:\n"upload" - Upload your own image\n"skip" - No image';
+  message += '\nOr reply:\n"upload" - Upload your own image\n"skip" - No image\nOr paste a direct image URL';
   bot.sendMessage(chatId, message);
 }
 
@@ -150,14 +153,12 @@ async function handleMessage(msg) {
   const text = msg.text || '';
   const photo = msg.photo;
 
-  // Cancel command
   if (text.toLowerCase() === '/cancel' || text.toLowerCase() === 'cancel') {
     await clearPending(userId);
     bot.sendMessage(chatId, 'Cancelled. Send a URL to get started.');
     return;
   }
 
-  // Edit command
   if (text.toLowerCase() === 'edit' || text.toLowerCase() === '/edit') {
     const data = await getLinks();
     if (!data.links || data.links.length === 0) {
@@ -174,7 +175,6 @@ async function handleMessage(msg) {
     return;
   }
 
-  // Delete command
   if (text.toLowerCase() === 'delete' || text.toLowerCase() === '/delete') {
     const data = await getLinks();
     if (!data.links || data.links.length === 0) {
@@ -191,14 +191,17 @@ async function handleMessage(msg) {
     return;
   }
 
-  // New URL submission
+  // Only treat http input as a new article URL if the user isn't mid-flow on an image step
   if (text.startsWith('http')) {
-    await savePending(userId, { url: text, step: 'fetching_images' });
-    bot.sendMessage(chatId, 'Got the URL. Fetching preview images...');
-    const images = await fetchImages(text);
-    const pending = await getPending(userId);
-    await presentImages(chatId, userId, images, pending);
-    return;
+    const existingPending = await getPending(userId);
+    if (!existingPending || !IMAGE_URL_STEPS.includes(existingPending.step)) {
+      await savePending(userId, { url: text, step: 'fetching_images' });
+      bot.sendMessage(chatId, 'Got the URL. Fetching preview images...');
+      const images = await fetchImages(text);
+      const pending = await getPending(userId);
+      await presentImages(chatId, userId, images, pending);
+      return;
+    }
   }
 
   const pending = await getPending(userId);
@@ -209,7 +212,6 @@ async function handleMessage(msg) {
     return;
   }
 
-  // Awaiting delete choice
   if (pending.step === 'awaiting_delete_choice') {
     const num = parseInt(text.trim());
     const data = await getLinks();
@@ -223,7 +225,6 @@ async function handleMessage(msg) {
     return;
   }
 
-  // Awaiting delete confirmation
   if (pending.step === 'awaiting_delete_confirm') {
     if (text.toLowerCase() === 'yes') {
       const data = await getLinks();
@@ -239,7 +240,6 @@ async function handleMessage(msg) {
     return;
   }
 
-  // Awaiting edit choice
   if (pending.step === 'awaiting_edit_choice') {
     const num = parseInt(text.trim());
     const data = await getLinks();
@@ -253,7 +253,6 @@ async function handleMessage(msg) {
     return;
   }
 
-  // Awaiting new headline for edit
   if (pending.step === 'awaiting_new_headline') {
     if (text.toLowerCase() === 'keep') {
       await savePending(userId, { ...pending, newHeadline: pending.oldHeadline, step: 'awaiting_edit_image_choice' });
@@ -264,6 +263,7 @@ async function handleMessage(msg) {
         '"keep" - Keep current image\n' +
         '"fetch" - Fetch new images from the URL\n' +
         '"upload" - Upload your own image\n' +
+        '"link" - Paste a direct image URL\n' +
         '"remove" - Remove image entirely');
       return;
     }
@@ -272,7 +272,6 @@ async function handleMessage(msg) {
     return;
   }
 
-  // Awaiting edit confirmation
   if (pending.step === 'awaiting_edit_confirm') {
     if (text.toLowerCase() === 'yes') {
       const data = await getLinks();
@@ -283,6 +282,7 @@ async function handleMessage(msg) {
         '"keep" - Keep current image\n' +
         '"fetch" - Fetch new images from the URL\n' +
         '"upload" - Upload your own image\n' +
+        '"link" - Paste a direct image URL\n' +
         '"remove" - Remove image entirely');
     } else {
       await clearPending(userId);
@@ -291,7 +291,6 @@ async function handleMessage(msg) {
     return;
   }
 
-  // Awaiting edit image choice
   if (pending.step === 'awaiting_edit_image_choice') {
     const choice = text.toLowerCase().trim();
 
@@ -314,7 +313,7 @@ async function handleMessage(msg) {
       const images = await fetchImages(url);
       if (images.length === 0) {
         await savePending(userId, { ...pending, step: 'awaiting_edit_custom_image' });
-        bot.sendMessage(chatId, 'No preview images found.\n\nSend me an image to upload, or reply "skip" to keep current image.');
+        bot.sendMessage(chatId, 'No preview images found.\n\nSend me an image file, paste a direct image URL, or reply "skip" to keep current image.');
         return;
       }
       await savePending(userId, { ...pending, availableImages: images, step: 'awaiting_edit_image_select' });
@@ -340,11 +339,16 @@ async function handleMessage(msg) {
       return;
     }
 
-    bot.sendMessage(chatId, 'Please reply with "keep", "fetch", "upload", or "remove".');
+    if (choice === 'link') {
+      await savePending(userId, { ...pending, step: 'awaiting_edit_custom_image' });
+      bot.sendMessage(chatId, 'Paste the direct image URL.');
+      return;
+    }
+
+    bot.sendMessage(chatId, 'Please reply with "keep", "fetch", "upload", "link", or "remove".');
     return;
   }
 
-  // Awaiting edit image select from fetched options
   if (pending.step === 'awaiting_edit_image_select') {
     const choice = text.trim();
     if (choice === 'skip') {
@@ -361,11 +365,15 @@ async function handleMessage(msg) {
     return;
   }
 
-  // Awaiting edit custom image upload
   if (pending.step === 'awaiting_edit_custom_image') {
     if (text.toLowerCase() === 'skip') {
       await savePending(userId, { ...pending, step: 'awaiting_edit_category' });
       await showCategoryPrompt(chatId, userId, pending, 'Image kept.');
+      return;
+    }
+    if (text.startsWith('http')) {
+      await savePending(userId, { ...pending, newImage: text, step: 'awaiting_edit_category' });
+      await showCategoryPrompt(chatId, userId, pending, 'Image URL saved.');
       return;
     }
     if (photo) {
@@ -383,11 +391,10 @@ async function handleMessage(msg) {
       }
       return;
     }
-    bot.sendMessage(chatId, 'Please send an image or reply "skip".');
+    bot.sendMessage(chatId, 'Please send an image file, paste a direct image URL, or reply "skip".');
     return;
   }
 
-  // Awaiting edit category
   if (pending.step === 'awaiting_edit_category') {
     const data = await getLinks();
     data.links[pending.editIndex].headline = pending.newHeadline;
@@ -415,7 +422,6 @@ async function handleMessage(msg) {
     return;
   }
 
-  // Awaiting image choice
   if (pending.step === 'awaiting_image_choice') {
     const choice = text.trim();
 
@@ -431,6 +437,12 @@ async function handleMessage(msg) {
       return;
     }
 
+    if (choice.startsWith('http')) {
+      await savePending(userId, { ...pending, image: choice, step: 'awaiting_headline' });
+      bot.sendMessage(chatId, 'Image URL saved. Now send me the headline.');
+      return;
+    }
+
     const num = parseInt(choice);
     if (!isNaN(num) && num >= 1 && num <= pending.availableImages.length) {
       const chosenImage = pending.availableImages[num - 1];
@@ -439,15 +451,19 @@ async function handleMessage(msg) {
       return;
     }
 
-    bot.sendMessage(chatId, 'Please reply with a number, "upload", or "skip".');
+    bot.sendMessage(chatId, 'Please reply with a number, "upload", "skip", or paste a direct image URL.');
     return;
   }
 
-  // Awaiting custom image upload
   if (pending.step === 'awaiting_custom_image') {
     if (text.toLowerCase() === 'skip') {
       await savePending(userId, { ...pending, image: null, step: 'awaiting_headline' });
       bot.sendMessage(chatId, 'No image. Now send me the headline.');
+      return;
+    }
+    if (text.startsWith('http')) {
+      await savePending(userId, { ...pending, image: text, step: 'awaiting_headline' });
+      bot.sendMessage(chatId, 'Image URL saved. Now send me the headline.');
       return;
     }
     if (photo) {
@@ -466,18 +482,16 @@ async function handleMessage(msg) {
       }
       return;
     }
-    bot.sendMessage(chatId, 'Please send an image or reply "skip".');
+    bot.sendMessage(chatId, 'Please send an image file, paste a direct image URL, or reply "skip".');
     return;
   }
 
-  // Awaiting headline
   if (pending.step === 'awaiting_headline') {
     await savePending(userId, { ...pending, headline: text, step: 'awaiting_position' });
     bot.sendMessage(chatId, 'Make this the top story? Reply yes or no.');
     return;
   }
 
-  // Awaiting position
   if (pending.step === 'awaiting_position') {
     const makeTop = text.toLowerCase() === 'yes';
     await savePending(userId, { ...pending, makeTop, step: 'awaiting_category' });
@@ -485,7 +499,6 @@ async function handleMessage(msg) {
     return;
   }
 
-  // Awaiting category
   if (pending.step === 'awaiting_category') {
     const num = parseInt(text.trim());
     if (isNaN(num) || num < 1 || num > 10) {
