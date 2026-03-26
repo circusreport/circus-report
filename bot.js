@@ -21,6 +21,34 @@ const AUTHORIZED_USER = parseInt(process.env.TELEGRAM_USER_ID);
 const WORKER_BASE = process.env.CLOUDFLARE_WORKER_URL.replace('/links', '');
 const AUTH_HEADER = { Authorization: 'Bearer ' + process.env.BOT_SECRET };
 
+const CATEGORIES = [
+  { label: 'US Politics', emoji: '🏦' },
+  { label: 'News Media', emoji: '📺' },
+  { label: 'Society & Culture', emoji: '🎭' },
+  { label: 'Sports News', emoji: '🏆' },
+  { label: 'Tech News', emoji: '💻' },
+  { label: 'Entertainment', emoji: '🎬' },
+  { label: 'World News', emoji: '🌍' },
+  { label: 'Economy & Business', emoji: '📈' },
+  { label: 'Crime & Law', emoji: '⚖️' },
+  { label: 'Health & Science', emoji: '🧬' }
+];
+
+const CATEGORY_MESSAGE = 'Choose a category:\n\n' +
+  '1. 🏦 US Politics\n' +
+  '2. 📺 News Media\n' +
+  '3. 🎭 Society & Culture\n' +
+  '4. 🏆 Sports News\n' +
+  '5. 💻 Tech News\n' +
+  '6. 🎬 Entertainment\n' +
+  '7. 🌍 World News\n' +
+  '8. 📈 Economy & Business\n' +
+  '9. ⚖️ Crime & Law\n' +
+  '10. 🧬 Health & Science\n\n' +
+  'Reply with a number.';
+
+const READY = '\n\nReady for next command.';
+
 async function getLinks() {
   const response = await axios.get(WORKER_BASE + '/links', { headers: AUTH_HEADER });
   return response.data;
@@ -71,9 +99,7 @@ async function presentImages(chatId, userId, images, pending) {
     bot.sendMessage(chatId, 'No preview images found for this URL.\n\nSend me an image to upload, or reply "skip" to use no image.');
     return;
   }
-
   await savePending(userId, { ...pending, availableImages: images, step: 'awaiting_image_choice' });
-
   for (let i = 0; i < images.length; i++) {
     try {
       await bot.sendPhoto(chatId, images[i], { caption: 'Option ' + (i + 1) });
@@ -81,12 +107,34 @@ async function presentImages(chatId, userId, images, pending) {
       console.log('Could not send image ' + (i + 1) + ':', err.message);
     }
   }
-
   let message = 'Reply with a number to choose an image:\n';
   for (let i = 0; i < images.length; i++) {
     message += (i + 1) + ' - Use this image\n';
   }
   message += '\nOr reply:\n"upload" - Upload your own image\n"skip" - No image';
+  bot.sendMessage(chatId, message);
+}
+
+async function showCategoryPrompt(chatId, userId, pending, prefixMessage) {
+  const data = await getLinks();
+  const currentCategory = pending.editIndex !== undefined ? data.links[pending.editIndex].category : null;
+  const currentEmoji = pending.editIndex !== undefined ? data.links[pending.editIndex].emoji : null;
+  const current = currentCategory ? currentEmoji + ' ' + currentCategory : 'None';
+  const message = prefixMessage + ' Now choose a category' +
+    (pending.editIndex !== undefined ? ' (current: ' + current + ')' : '') +
+    ':\n\n' +
+    '1. 🏦 US Politics\n' +
+    '2. 📺 News Media\n' +
+    '3. 🎭 Society & Culture\n' +
+    '4. 🏆 Sports News\n' +
+    '5. 💻 Tech News\n' +
+    '6. 🎬 Entertainment\n' +
+    '7. 🌍 World News\n' +
+    '8. 📈 Economy & Business\n' +
+    '9. ⚖️ Crime & Law\n' +
+    '10. 🧬 Health & Science\n\n' +
+    'Reply with a number' +
+    (pending.editIndex !== undefined ? ', or "keep" to leave unchanged.' : '.');
   bot.sendMessage(chatId, message);
 }
 
@@ -125,7 +173,7 @@ async function handleMessage(msg) {
     bot.sendMessage(chatId, message);
     return;
   }
-  
+
   // Delete command
   if (text.toLowerCase() === 'delete' || text.toLowerCase() === '/delete') {
     const data = await getLinks();
@@ -161,6 +209,36 @@ async function handleMessage(msg) {
     return;
   }
 
+  // Awaiting delete choice
+  if (pending.step === 'awaiting_delete_choice') {
+    const num = parseInt(text.trim());
+    const data = await getLinks();
+    if (isNaN(num) || num < 1 || num > data.links.length) {
+      bot.sendMessage(chatId, 'Invalid number. Reply with a number from the list, or "cancel".');
+      return;
+    }
+    const targetLink = data.links[num - 1];
+    await savePending(userId, { step: 'awaiting_delete_confirm', deleteIndex: num - 1, headline: targetLink.headline });
+    bot.sendMessage(chatId, 'Are you sure you want to delete:\n\n"' + targetLink.headline + '"\n\nReply "yes" to confirm or "cancel" to go back.');
+    return;
+  }
+
+  // Awaiting delete confirmation
+  if (pending.step === 'awaiting_delete_confirm') {
+    if (text.toLowerCase() === 'yes') {
+      const data = await getLinks();
+      const removed = data.links.splice(pending.deleteIndex, 1)[0];
+      data.lastUpdated = new Date().toISOString();
+      await saveLinks(data);
+      await clearPending(userId);
+      bot.sendMessage(chatId, 'Deleted: ' + removed.headline + READY);
+    } else {
+      await clearPending(userId);
+      bot.sendMessage(chatId, 'Cancelled. Nothing was deleted.' + READY);
+    }
+    return;
+  }
+
   // Awaiting edit choice
   if (pending.step === 'awaiting_edit_choice') {
     const num = parseInt(text.trim());
@@ -171,7 +249,8 @@ async function handleMessage(msg) {
     }
     const targetLink = data.links[num - 1];
     await savePending(userId, { step: 'awaiting_new_headline', editIndex: num - 1, oldHeadline: targetLink.headline });
-    bot.sendMessage(chatId, 'Current headline:\n"' + targetLink.headline + '"\n\nSend me the new headline, or reply "keep" to leave it unchanged.');    return;
+    bot.sendMessage(chatId, 'Current headline:\n"' + targetLink.headline + '"\n\nSend me the new headline, or reply "keep" to leave it unchanged.');
+    return;
   }
 
   // Awaiting new headline for edit
@@ -207,7 +286,7 @@ async function handleMessage(msg) {
         '"remove" - Remove image entirely');
     } else {
       await clearPending(userId);
-      bot.sendMessage(chatId, 'Cancelled. Headline was not changed.');
+      bot.sendMessage(chatId, 'Cancelled. Headline was not changed.' + READY);
     }
     return;
   }
@@ -218,45 +297,13 @@ async function handleMessage(msg) {
 
     if (choice === 'keep') {
       await savePending(userId, { ...pending, step: 'awaiting_edit_category' });
-      const data = await getLinks();
-      const currentCategory = data.links[pending.editIndex].category;
-      const currentEmoji = data.links[pending.editIndex].emoji;
-      const current = currentCategory ? currentEmoji + ' ' + currentCategory : 'None';
-      const categoryMessage = 'Image kept. Now choose a category (current: ' + current + '):\n\n' +
-        '1. 🏦 US Politics\n' +
-        '2. 📺 News Media\n' +
-        '3. 🎭 Society & Culture\n' +
-        '4. 🏆 Sports News\n' +
-        '5. 💻 Tech News\n' +
-        '6. 🎬 Entertainment\n' +
-        '7. 🌍 World News\n' +
-        '8. 📈 Economy & Business\n' +
-        '9. ⚖️ Crime & Law\n' +
-        '10. 🧬 Health & Science\n\n' +
-        'Reply with a number, or "keep" to leave it unchanged.';
-      bot.sendMessage(chatId, categoryMessage);
+      await showCategoryPrompt(chatId, userId, pending, 'Image kept.');
       return;
     }
 
     if (choice === 'remove') {
       await savePending(userId, { ...pending, newImage: null, step: 'awaiting_edit_category' });
-      const data = await getLinks();
-      const currentCategory = data.links[pending.editIndex].category;
-      const currentEmoji = data.links[pending.editIndex].emoji;
-      const current = currentCategory ? currentEmoji + ' ' + currentCategory : 'None';
-      const categoryMessage = 'Image removed. Now choose a category (current: ' + current + '):\n\n' +
-        '1. 🏦 US Politics\n' +
-        '2. 📺 News Media\n' +
-        '3. 🎭 Society & Culture\n' +
-        '4. 🏆 Sports News\n' +
-        '5. 💻 Tech News\n' +
-        '6. 🎬 Entertainment\n' +
-        '7. 🌍 World News\n' +
-        '8. 📈 Economy & Business\n' +
-        '9. ⚖️ Crime & Law\n' +
-        '10. 🧬 Health & Science\n\n' +
-        'Reply with a number, or "keep" to leave it unchanged.';
-      bot.sendMessage(chatId, categoryMessage);
+      await showCategoryPrompt(chatId, userId, pending, 'Image removed.');
       return;
     }
 
@@ -310,23 +357,7 @@ async function handleMessage(msg) {
       }
       await savePending(userId, { ...pending, newImage: pending.availableImages[num - 1], step: 'awaiting_edit_category' });
     }
-    const data = await getLinks();
-    const currentCategory = data.links[pending.editIndex].category;
-    const currentEmoji = data.links[pending.editIndex].emoji;
-    const current = currentCategory ? currentEmoji + ' ' + currentCategory : 'None';
-    const categoryMessage = 'Image updated. Now choose a category (current: ' + current + '):\n\n' +
-      '1. 🏦 US Politics\n' +
-      '2. 📺 News Media\n' +
-      '3. 🎭 Society & Culture\n' +
-      '4. 🏆 Sports News\n' +
-      '5. 💻 Tech News\n' +
-      '6. 🎬 Entertainment\n' +
-      '7. 🌍 World News\n' +
-      '8. 📈 Economy & Business\n' +
-      '9. ⚖️ Crime & Law\n' +
-      '10. 🧬 Health & Science\n\n' +
-      'Reply with a number, or "keep" to leave it unchanged.';
-    bot.sendMessage(chatId, categoryMessage);
+    await showCategoryPrompt(chatId, userId, pending, 'Image updated.');
     return;
   }
 
@@ -334,23 +365,7 @@ async function handleMessage(msg) {
   if (pending.step === 'awaiting_edit_custom_image') {
     if (text.toLowerCase() === 'skip') {
       await savePending(userId, { ...pending, step: 'awaiting_edit_category' });
-      const data = await getLinks();
-      const currentCategory = data.links[pending.editIndex].category;
-      const currentEmoji = data.links[pending.editIndex].emoji;
-      const current = currentCategory ? currentEmoji + ' ' + currentCategory : 'None';
-      const categoryMessage = 'Image kept. Now choose a category (current: ' + current + '):\n\n' +
-        '1. 🏦 US Politics\n' +
-        '2. 📺 News Media\n' +
-        '3. 🎭 Society & Culture\n' +
-        '4. 🏆 Sports News\n' +
-        '5. 💻 Tech News\n' +
-        '6. 🎬 Entertainment\n' +
-        '7. 🌍 World News\n' +
-        '8. 📈 Economy & Business\n' +
-        '9. ⚖️ Crime & Law\n' +
-        '10. 🧬 Health & Science\n\n' +
-        'Reply with a number, or "keep" to leave it unchanged.';
-      bot.sendMessage(chatId, categoryMessage);
+      await showCategoryPrompt(chatId, userId, pending, 'Image kept.');
       return;
     }
     if (photo) {
@@ -361,23 +376,7 @@ async function handleMessage(msg) {
         const fileUrl = 'https://api.telegram.org/file/bot' + process.env.TELEGRAM_TOKEN + '/' + file.file_path;
         const uploadResult = await cloudinary.uploader.upload(fileUrl);
         await savePending(userId, { ...pending, newImage: uploadResult.secure_url, step: 'awaiting_edit_category' });
-        const data = await getLinks();
-        const currentCategory = data.links[pending.editIndex].category;
-        const currentEmoji = data.links[pending.editIndex].emoji;
-        const current = currentCategory ? currentEmoji + ' ' + currentCategory : 'None';
-        const categoryMessage = 'Image uploaded. Now choose a category (current: ' + current + '):\n\n' +
-          '1. 🏦 US Politics\n' +
-          '2. 📺 News Media\n' +
-          '3. 🎭 Society & Culture\n' +
-          '4. 🏆 Sports News\n' +
-          '5. 💻 Tech News\n' +
-          '6. 🎬 Entertainment\n' +
-          '7. 🌍 World News\n' +
-          '8. 📈 Economy & Business\n' +
-          '9. ⚖️ Crime & Law\n' +
-          '10. 🧬 Health & Science\n\n' +
-          'Reply with a number, or "keep" to leave it unchanged.';
-        bot.sendMessage(chatId, categoryMessage);
+        await showCategoryPrompt(chatId, userId, pending, 'Image uploaded.');
       } catch (err) {
         console.error('Cloudinary upload error:', err);
         bot.sendMessage(chatId, 'Image upload failed. Try again or reply "skip".');
@@ -390,18 +389,6 @@ async function handleMessage(msg) {
 
   // Awaiting edit category
   if (pending.step === 'awaiting_edit_category') {
-    const categories = [
-      { label: 'US Politics', emoji: '🏦' },
-      { label: 'News Media', emoji: '📺' },
-      { label: 'Society & Culture', emoji: '🎭' },
-      { label: 'Sports News', emoji: '🏆' },
-      { label: 'Tech News', emoji: '💻' },
-      { label: 'Entertainment', emoji: '🎬' },
-      { label: 'World News', emoji: '🌍' },
-      { label: 'Economy & Business', emoji: '📈' },
-      { label: 'Crime & Law', emoji: '⚖️' },
-      { label: 'Health & Science', emoji: '🧬' }
-    ];
     const data = await getLinks();
     data.links[pending.editIndex].headline = pending.newHeadline;
     if ('newImage' in pending) {
@@ -417,44 +404,14 @@ async function handleMessage(msg) {
         bot.sendMessage(chatId, 'Please reply with a number between 1 and 10, or "keep".');
         return;
       }
-      const chosen = categories[num - 1];
+      const chosen = CATEGORIES[num - 1];
       data.links[pending.editIndex].category = chosen.label;
       data.links[pending.editIndex].emoji = chosen.emoji;
     }
     data.lastUpdated = new Date().toISOString();
     await saveLinks(data);
     await clearPending(userId);
-    bot.sendMessage(chatId, 'Updated!\n\nOld: "' + pending.oldHeadline + '"\nNew: "' + pending.newHeadline + '"');
-    return;
-  }
-  
-  // Awaiting delete choice
-  if (pending.step === 'awaiting_delete_choice') {
-    const num = parseInt(text.trim());
-    const data = await getLinks();
-    if (isNaN(num) || num < 1 || num > data.links.length) {
-      bot.sendMessage(chatId, 'Invalid number. Reply with a number from the list, or "cancel".');
-      return;
-    }
-    const targetLink = data.links[num - 1];
-    await savePending(userId, { step: 'awaiting_delete_confirm', deleteIndex: num - 1, headline: targetLink.headline });
-    bot.sendMessage(chatId, 'Are you sure you want to delete:\n\n"' + targetLink.headline + '"\n\nReply "yes" to confirm or "cancel" to go back.');
-    return;
-  }
-
-  // Awaiting delete confirmation
-  if (pending.step === 'awaiting_delete_confirm') {
-    if (text.toLowerCase() === 'yes') {
-      const data = await getLinks();
-      const removed = data.links.splice(pending.deleteIndex, 1)[0];
-      data.lastUpdated = new Date().toISOString();
-      await saveLinks(data);
-      await clearPending(userId);
-      bot.sendMessage(chatId, 'Deleted: ' + removed.headline);
-    } else {
-      await clearPending(userId);
-      bot.sendMessage(chatId, 'Cancelled. Nothing was deleted.');
-    }
+    bot.sendMessage(chatId, 'Updated!\n\nOld: "' + pending.oldHeadline + '"\nNew: "' + pending.newHeadline + '"' + READY);
     return;
   }
 
@@ -493,7 +450,6 @@ async function handleMessage(msg) {
       bot.sendMessage(chatId, 'No image. Now send me the headline.');
       return;
     }
-
     if (photo) {
       const fileId = photo[photo.length - 1].file_id;
       bot.sendMessage(chatId, 'Uploading your image to Cloudinary...');
@@ -510,7 +466,6 @@ async function handleMessage(msg) {
       }
       return;
     }
-
     bot.sendMessage(chatId, 'Please send an image or reply "skip".');
     return;
   }
@@ -526,42 +481,18 @@ async function handleMessage(msg) {
   if (pending.step === 'awaiting_position') {
     const makeTop = text.toLowerCase() === 'yes';
     await savePending(userId, { ...pending, makeTop, step: 'awaiting_category' });
-    const categoryMessage = 'Choose a category:\n\n' +
-      '1. 🏦 US Politics\n' +
-      '2. 📺 News Media\n' +
-      '3. 🎭 Society & Culture\n' +
-      '4. 🏆 Sports News\n' +
-      '5. 💻 Tech News\n' +
-      '6. 🎬 Entertainment\n' +
-      '7. 🌍 World News\n' +
-      '8. 📈 Economy & Business\n' +
-      '9. ⚖️ Crime & Law\n' +
-      '10. 🧬 Health & Science\n\n' +
-      'Reply with a number.';
-    bot.sendMessage(chatId, categoryMessage);
+    bot.sendMessage(chatId, CATEGORY_MESSAGE);
     return;
   }
 
   // Awaiting category
   if (pending.step === 'awaiting_category') {
-    const categories = [
-      { label: 'US Politics', emoji: '🏦' },
-      { label: 'News Media', emoji: '📺' },
-      { label: 'Society & Culture', emoji: '🎭' },
-      { label: 'Sports News', emoji: '🏆' },
-      { label: 'Tech News', emoji: '💻' },
-      { label: 'Entertainment', emoji: '🎬' },
-      { label: 'World News', emoji: '🌍' },
-      { label: 'Economy & Business', emoji: '📈' },
-      { label: 'Crime & Law', emoji: '⚖️' },
-      { label: 'Health & Science', emoji: '🧬' }
-    ];
     const num = parseInt(text.trim());
     if (isNaN(num) || num < 1 || num > 10) {
       bot.sendMessage(chatId, 'Please reply with a number between 1 and 10.');
       return;
     }
-    const chosen = categories[num - 1];
+    const chosen = CATEGORIES[num - 1];
     try {
       const data = await getLinks();
       const newLink = {
@@ -585,7 +516,7 @@ async function handleMessage(msg) {
       await saveLinks(data);
       await clearPending(userId);
       console.log('Links saved successfully to Cloudflare KV');
-      bot.sendMessage(chatId, 'Done! Posted under ' + chosen.emoji + ' ' + chosen.label + '.');
+      bot.sendMessage(chatId, (pending.makeTop ? 'Done! Posted as top story.' : 'Done! Added to the list.') + READY);
     } catch (err) {
       bot.sendMessage(chatId, 'Something went wrong updating the site. Try again.');
       console.error('Error saving links:', err);
