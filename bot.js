@@ -304,7 +304,7 @@ async function generateHeadlines(url) {
         }],
         generationConfig: {
           temperature: 0.8,
-          maxOutputTokens: 300
+          maxOutputTokens: 1024
         }
       },
       {
@@ -314,9 +314,13 @@ async function generateHeadlines(url) {
     );
 
     const raw = geminiResponse.data.candidates[0].content.parts[0].text.trim();
+    console.log('Gemini raw response:', raw);
     // Strip markdown code fences if present
     const cleaned = raw.replace(/```json|```/g, '').trim();
-    const headlines = JSON.parse(cleaned);
+    // Extract JSON array even if there's surrounding text
+    const match = cleaned.match(/\[.*\]/s);
+    if (!match) throw new Error('No JSON array found in response');
+    const headlines = JSON.parse(match[0]);
     if (!Array.isArray(headlines) || headlines.length === 0) throw new Error('Invalid response format');
     return headlines.slice(0, 3);
   } catch (err) {
