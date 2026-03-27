@@ -287,14 +287,22 @@
         height: 100px;
       }
 
-      /* Row of 5: collapse to 2 columns */
+      /* Row of 5: text-only 2-column list on mobile */
       .sub-row-5 {
         grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        padding: 10px 0;
       }
 
       .sub-row-card img,
       .sub-row-card .no-image {
-        height: 90px;
+        display: none;
+      }
+
+      .sub-row-card a.headline {
+        font-size: 0.85em;
+        margin-top: 0;
+        text-align: left;
       }
 
       .links-grid { columns: 1; }
