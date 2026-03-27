@@ -289,13 +289,13 @@ async function generateHeadlines(url) {
     // Extract readable text: title + meta description + first 2000 chars of body text
     const title = $('title').text().trim();
     const metaDesc = $('meta[name="description"]').attr('content') || '';
-    const bodyText = $('p').map((i, el) => $(el).text().trim()).get().join(' ').slice(0, 2000);
+    const bodyText = $('p').map((i, el) => $(el).text().trim()).get().join(' ').slice(0, 5000);
     const articleContent = [title, metaDesc, bodyText].filter(Boolean).join('\n\n');
 
     const systemPrompt = process.env.HEADLINE_PROMPT || 'You are a conservative news headline writer. Propose exactly 3 punchy conservative headlines. Return only a JSON array of 3 strings, nothing else.';
 
     const geminiResponse = await axios.post(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + process.env.GEMINI_API_KEY,
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + process.env.GEMINI_API_KEY,
       {
         contents: [{
           parts: [{
@@ -304,10 +304,7 @@ async function generateHeadlines(url) {
         }],
         generationConfig: {
           temperature: 0.8,
-          maxOutputTokens: 500,
-          thinkingConfig: {
-            thinkingBudget: 0
-          }
+          maxOutputTokens: 500
         }
       },
       {
@@ -316,7 +313,6 @@ async function generateHeadlines(url) {
       }
     );
 
-    console.log('Gemini full response:', JSON.stringify(geminiResponse.data, null, 2));
     const raw = geminiResponse.data.candidates[0].content.parts[0].text.trim();
     console.log('Gemini raw response:', raw);
     // Strip markdown code fences if present
