@@ -141,6 +141,140 @@ async function showCategoryPrompt(chatId, userId, pending, prefixMessage) {
   bot.sendMessage(chatId, message);
 }
 
+
+// ── Source scrapers ──────────────────────────────────────────────
+
+const SOURCES = [
+  { name: 'Memeorandum', url: 'https://www.memeorandum.com', scrape: scrapeMemeorandum },
+  { name: 'Techmeme',    url: 'https://www.techmeme.com',    scrape: scrapeTechmeme },
+  { name: 'MediaGazer',  url: 'https://www.mediagazer.com',  scrape: scrapeMediaGazer },
+  { name: 'Drudge',      url: 'https://www.drudgereport.com',scrape: scrapeDrudge },
+  { name: 'NY Post',     url: 'https://nypost.com',          scrape: scrapeNYPost },
+  { name: 'Deadline',    url: 'https://deadline.com',        scrape: scrapeDeadline },
+  { name: 'ESPN',        url: 'https://www.espn.com',        scrape: scrapeESPN },
+];
+
+async function fetchPage(url) {
+  const response = await axios.get(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' },
+    timeout: 10000
+  });
+  return cheerio.load(response.data);
+}
+
+async function scrapeMemeorandum() {
+  const $ = await fetchPage('https://www.memeorandum.com');
+  const results = [];
+  $('h2 > a').each((i, el) => {
+    if (results.length >= 3) return false;
+    const headline = $(el).text().trim();
+    const url = $(el).attr('href');
+    if (headline && url && url.startsWith('http')) results.push({ headline, url });
+  });
+  return results;
+}
+
+async function scrapeTechmeme() {
+  const $ = await fetchPage('https://www.techmeme.com');
+  const results = [];
+  $('h2 > a').each((i, el) => {
+    if (results.length >= 2) return false;
+    const headline = $(el).text().trim();
+    const url = $(el).attr('href');
+    if (headline && url && url.startsWith('http')) results.push({ headline, url });
+  });
+  return results;
+}
+
+async function scrapeMediaGazer() {
+  const $ = await fetchPage('https://www.mediagazer.com');
+  const results = [];
+  $('h2 > a').each((i, el) => {
+    if (results.length >= 2) return false;
+    const headline = $(el).text().trim();
+    const url = $(el).attr('href');
+    if (headline && url && url.startsWith('http')) results.push({ headline, url });
+  });
+  return results;
+}
+
+async function scrapeDrudge() {
+  const $ = await fetchPage('https://www.drudgereport.com');
+  const results = [];
+  // Drudge uses plain <a> tags in the main column
+  $('a[href^="http"]').each((i, el) => {
+    if (results.length >= 2) return false;
+    const headline = $(el).text().trim();
+    const url = $(el).attr('href');
+    if (headline && headline.length > 20 && url && !url.includes('drudgereport.com')) {
+      results.push({ headline, url });
+    }
+  });
+  return results;
+}
+
+async function scrapeNYPost() {
+  const $ = await fetchPage('https://nypost.com');
+  const results = [];
+  $('h3 a, h2 a').each((i, el) => {
+    if (results.length >= 2) return false;
+    const headline = $(el).text().trim();
+    let url = $(el).attr('href');
+    if (!url) return;
+    if (!url.startsWith('http')) url = 'https://nypost.com' + url;
+    if (headline && headline.length > 15) results.push({ headline, url });
+  });
+  return results;
+}
+
+async function scrapeDeadline() {
+  const $ = await fetchPage('https://deadline.com');
+  const results = [];
+  $('h2 a, h3 a').each((i, el) => {
+    if (results.length >= 2) return false;
+    const headline = $(el).text().trim();
+    let url = $(el).attr('href');
+    if (!url) return;
+    if (!url.startsWith('http')) url = 'https://deadline.com' + url;
+    if (headline && headline.length > 15) results.push({ headline, url });
+  });
+  return results;
+}
+
+async function scrapeESPN() {
+  const $ = await fetchPage('https://www.espn.com');
+  const results = [];
+  $('h1 a, h2 a, .contentItem__title a').each((i, el) => {
+    if (results.length >= 2) return false;
+    const headline = $(el).text().trim();
+    let url = $(el).attr('href');
+    if (!url) return;
+    if (!url.startsWith('http')) url = 'https://www.espn.com' + url;
+    if (headline && headline.length > 15) results.push({ headline, url });
+  });
+  return results;
+}
+
+async function fetchTopStories(existingUrls) {
+  const allResults = [];
+  await Promise.allSettled(
+    SOURCES.map(async source => {
+      try {
+        const stories = await source.scrape();
+        stories.forEach(s => {
+          if (!existingUrls.includes(s.url)) {
+            allResults.push({ ...s, source: source.name });
+          }
+        });
+      } catch (err) {
+        console.log('Scrape failed for ' + source.name + ':', err.message);
+      }
+    })
+  );
+  // Limit to 10
+  return allResults.slice(0, 10);
+}
+
 async function handleMessage(msg) {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
@@ -188,6 +322,31 @@ async function handleMessage(msg) {
     });
     message += '\nReply with a number, or "cancel" to go back.';
     bot.sendMessage(chatId, message);
+    return;
+  }
+
+
+  if (text.toLowerCase() === 'fetch' || text.toLowerCase() === '/fetch') {
+    bot.sendMessage(chatId, 'Fetching top stories from across the web...');
+    try {
+      const data = await getLinks();
+      const existingUrls = (data.links || []).map(l => l.url);
+      const stories = await fetchTopStories(existingUrls);
+      if (stories.length === 0) {
+        bot.sendMessage(chatId, 'No new stories found. Try again later.');
+        return;
+      }
+      await savePending(userId, { step: 'awaiting_fetch_choice', fetchedStories: stories });
+      let message = 'Here are today\'s top stories:\n\n';
+      stories.forEach((s, i) => {
+        message += (i + 1) + '. [' + s.headline + '](' + s.url + ') — ' + s.source + '\n\n';
+      });
+      message += 'Reply with a number to add a story, or "cancel" to go back.';
+      bot.sendMessage(chatId, message, { parse_mode: 'Markdown', disable_web_page_preview: true });
+    } catch (err) {
+      console.error('Fetch error:', err);
+      bot.sendMessage(chatId, 'Something went wrong fetching stories. Try again.');
+    }
     return;
   }
 
@@ -555,6 +714,22 @@ async function handleMessage(msg) {
       bot.sendMessage(chatId, 'Something went wrong updating the site. Try again.');
       console.error('Error saving links:', err);
     }
+    return;
+  }
+
+
+  if (pending.step === 'awaiting_fetch_choice') {
+    const num = parseInt(text.trim());
+    if (isNaN(num) || num < 1 || num > pending.fetchedStories.length) {
+      bot.sendMessage(chatId, 'Please reply with a number from the list, or "cancel".');
+      return;
+    }
+    const chosen = pending.fetchedStories[num - 1];
+    await savePending(userId, { url: chosen.url, step: 'fetching_images' });
+    bot.sendMessage(chatId, 'Got it. Fetching preview images for:\n"' + chosen.headline + '"');
+    const images = await fetchImages(chosen.url);
+    const updatedPending = await getPending(userId);
+    await presentImages(chatId, userId, images, updatedPending);
     return;
   }
 
