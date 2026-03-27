@@ -304,7 +304,10 @@ async function generateHeadlines(url) {
         }],
         generationConfig: {
           temperature: 0.8,
-          maxOutputTokens: 1024
+          maxOutputTokens: 500,
+          thinkingConfig: {
+            thinkingBudget: 0
+          }
         }
       },
       {
