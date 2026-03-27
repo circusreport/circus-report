@@ -275,6 +275,75 @@ async function fetchTopStories(existingUrls) {
   return allResults.slice(0, 10);
 }
 
+
+// ── Gemini headline generation ────────────────────────────────────
+
+async function generateHeadlines(url) {
+  try {
+    // Fetch article text
+    const pageResponse = await axios.get(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' },
+      timeout: 10000
+    });
+    const $ = cheerio.load(pageResponse.data);
+    // Extract readable text: title + meta description + first 2000 chars of body text
+    const title = $('title').text().trim();
+    const metaDesc = $('meta[name="description"]').attr('content') || '';
+    const bodyText = $('p').map((i, el) => $(el).text().trim()).get().join(' ').slice(0, 2000);
+    const articleContent = [title, metaDesc, bodyText].filter(Boolean).join('\n\n');
+
+    const systemPrompt = process.env.HEADLINE_PROMPT || 'You are a conservative news headline writer. Propose exactly 3 punchy conservative headlines. Return only a JSON array of 3 strings, nothing else.';
+
+    const geminiResponse = await axios.post(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + process.env.GEMINI_API_KEY,
+      {
+        contents: [{
+          parts: [{
+            text: systemPrompt + '\n\nArticle content:\n' + articleContent
+          }]
+        }],
+        generationConfig: {
+          temperature: 0.8,
+          maxOutputTokens: 300
+        }
+      },
+      {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 15000
+      }
+    );
+
+    const raw = geminiResponse.data.candidates[0].content.parts[0].text.trim();
+    // Strip markdown code fences if present
+    const cleaned = raw.replace(/```json|```/g, '').trim();
+    const headlines = JSON.parse(cleaned);
+    if (!Array.isArray(headlines) || headlines.length === 0) throw new Error('Invalid response format');
+    return headlines.slice(0, 3);
+  } catch (err) {
+    console.error('Gemini headline error:', err.message);
+    return null;
+  }
+}
+
+
+async function triggerHeadlineGeneration(chatId, userId, pending) {
+  await savePending(userId, { ...pending, step: 'generating_headlines' });
+  bot.sendMessage(chatId, 'Generating headline options...');
+  const headlines = await generateHeadlines(pending.url);
+  if (!headlines) {
+    await savePending(userId, { ...pending, step: 'awaiting_headline' });
+    bot.sendMessage(chatId, 'Could not generate headlines. Send me a headline manually.');
+    return;
+  }
+  await savePending(userId, { ...pending, aiHeadlines: headlines, step: 'awaiting_headline_choice' });
+  let message = 'Here are 3 headline options:\n\n';
+  headlines.forEach((h, i) => {
+    message += (i + 1) + '. ' + h + '\n\n';
+  });
+  message += 'Reply with a number to use that headline, or type your own.';
+  bot.sendMessage(chatId, message);
+}
+
 async function handleMessage(msg) {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
@@ -593,8 +662,8 @@ async function handleMessage(msg) {
     const choice = text.trim();
 
     if (choice === 'skip') {
-      await savePending(userId, { ...pending, image: null, step: 'awaiting_headline' });
-      bot.sendMessage(chatId, 'No image. Now send me the headline.');
+      const updatedPending1 = { ...pending, image: null };
+      await triggerHeadlineGeneration(chatId, userId, updatedPending1);
       return;
     }
 
@@ -605,16 +674,16 @@ async function handleMessage(msg) {
     }
 
     if (choice.startsWith('http')) {
-      await savePending(userId, { ...pending, image: choice, step: 'awaiting_headline' });
-      bot.sendMessage(chatId, 'Image URL saved. Now send me the headline.');
+      const updatedPending2 = { ...pending, image: choice };
+      await triggerHeadlineGeneration(chatId, userId, updatedPending2);
       return;
     }
 
     const num = parseInt(choice);
     if (!isNaN(num) && num >= 1 && num <= pending.availableImages.length) {
       const chosenImage = pending.availableImages[num - 1];
-      await savePending(userId, { ...pending, image: chosenImage, step: 'awaiting_headline' });
-      bot.sendMessage(chatId, 'Image selected. Now send me the headline.');
+      const updatedPending3 = { ...pending, image: chosenImage };
+      await triggerHeadlineGeneration(chatId, userId, updatedPending3);
       return;
     }
 
@@ -624,13 +693,13 @@ async function handleMessage(msg) {
 
   if (pending.step === 'awaiting_custom_image') {
     if (text.toLowerCase() === 'skip') {
-      await savePending(userId, { ...pending, image: null, step: 'awaiting_headline' });
-      bot.sendMessage(chatId, 'No image. Now send me the headline.');
+      const updatedPending6 = { ...pending, image: null };
+      await triggerHeadlineGeneration(chatId, userId, updatedPending6);
       return;
     }
     if (text.startsWith('http')) {
-      await savePending(userId, { ...pending, image: text, step: 'awaiting_headline' });
-      bot.sendMessage(chatId, 'Image URL saved. Now send me the headline.');
+      const updatedPending4 = { ...pending, image: text };
+      await triggerHeadlineGeneration(chatId, userId, updatedPending4);
       return;
     }
     if (photo) {
@@ -641,8 +710,8 @@ async function handleMessage(msg) {
         const fileUrl = 'https://api.telegram.org/file/bot' + process.env.TELEGRAM_TOKEN + '/' + file.file_path;
         const uploadResult = await cloudinary.uploader.upload(fileUrl);
         console.log('Cloudinary upload result:', uploadResult.secure_url);
-        await savePending(userId, { ...pending, image: uploadResult.secure_url, step: 'awaiting_headline' });
-        bot.sendMessage(chatId, 'Image uploaded. Now send me the headline.');
+        const updatedPending5 = { ...pending, image: uploadResult.secure_url };
+        await triggerHeadlineGeneration(chatId, userId, updatedPending5);
       } catch (err) {
         console.error('Cloudinary upload error:', err);
         bot.sendMessage(chatId, 'Image upload failed. Try again or reply "skip".');
@@ -654,7 +723,25 @@ async function handleMessage(msg) {
   }
 
   if (pending.step === 'awaiting_headline') {
+    // Fallback: manual headline entry (AI generation failed)
     await savePending(userId, { ...pending, headline: text, step: 'awaiting_position' });
+    bot.sendMessage(chatId, 'Where do you want to place this?\n\n"yes" - Top Headline\n"1" - Sub-Headlines (image row)\n"2" - Link Only Headlines');
+    return;
+  }
+
+  if (pending.step === 'awaiting_headline_choice') {
+    const num = parseInt(text.trim());
+    let chosenHeadline;
+    if (!isNaN(num) && num >= 1 && num <= pending.aiHeadlines.length) {
+      chosenHeadline = pending.aiHeadlines[num - 1];
+    } else if (text.trim().length > 3) {
+      // User typed their own headline
+      chosenHeadline = text.trim();
+    } else {
+      bot.sendMessage(chatId, 'Reply with a number to choose a headline, or type your own.');
+      return;
+    }
+    await savePending(userId, { ...pending, headline: chosenHeadline, step: 'awaiting_position' });
     bot.sendMessage(chatId, 'Where do you want to place this?\n\n"yes" - Top Headline\n"1" - Sub-Headlines (image row)\n"2" - Link Only Headlines');
     return;
   }
