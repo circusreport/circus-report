@@ -380,10 +380,25 @@ async function handleMessage(msg) {
   }
   console.log('Retrieved pending state:', JSON.stringify(pending));
 
-  // Handle http URLs: treat as new article ONLY if not in an image step
+  // Handle http URLs
   if (text.startsWith('http')) {
     const currentStep = pending ? pending.step : null;
-    if (!IMAGE_URL_STEPS.includes(currentStep)) {
+    const isImageStep = IMAGE_URL_STEPS.includes(currentStep);
+
+    // Detect likely image URLs by extension or known image CDN patterns
+    const imagePatterns = [
+      /\.(jpg|jpeg|png|gif|webp|avif|svg)(\?.*)?$/i,
+      /\/image\//i, /\/images\//i, /\/img\//i,
+      /\/uploads\//i, /\/media\//i, /\/photos\//i,
+      /\/wp-content\//i, /\/static\//i,
+      /cloudinary\.com/i, /imgix\.net/i, /amazonaws\.com.*\.(jpg|jpeg|png|webp)/i,
+      /s\.yimg\.com/i, /media-cldnry/i, /nbcnews\.com\/image/i,
+    ];
+    const looksLikeImage = imagePatterns.some(p => p.test(text));
+
+    if (isImageStep || looksLikeImage) {
+      // Treat as image URL — fall through to pending step handlers below
+    } else {
       await savePending(userId, { url: text, step: 'fetching_images' });
       bot.sendMessage(chatId, 'Got the URL. Fetching preview images...');
       const images = await fetchImages(text);
@@ -391,7 +406,6 @@ async function handleMessage(msg) {
       await presentImages(chatId, userId, images, freshPending);
       return;
     }
-    // If in an image step, fall through to the pending step handlers below
   }
 
   if (!pending) {
