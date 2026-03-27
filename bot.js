@@ -313,6 +313,7 @@ async function generateHeadlines(url) {
       }
     );
 
+    console.log('Gemini full response:', JSON.stringify(geminiResponse.data, null, 2));
     const raw = geminiResponse.data.candidates[0].content.parts[0].text.trim();
     console.log('Gemini raw response:', raw);
     // Strip markdown code fences if present
