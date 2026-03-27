@@ -209,13 +209,13 @@
        TEXT LINKS — 3 columns
     ══════════════════════════════════════ */
     .links-grid {
-      columns: 3;
-      column-gap: 30px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px 30px;
     }
 
     .link-item {
-      break-inside: avoid;
-      margin-bottom: 10px;
+      margin-bottom: 0;
     }
 
     .link-item a {
@@ -280,8 +280,8 @@
         font-size: 0.85em;
       }
 
-      /* Text links: 1 column on mobile */
-      .links-grid { columns: 1; }
+      /* Text links: 2 columns on mobile */
+      .links-grid { grid-template-columns: repeat(2, 1fr); }
     }
   </style>
 </head>
