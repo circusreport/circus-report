@@ -4,6 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CIRCUS REPORT</title>
+  <meta name="description" content="Making sense of the circus we call media, politics, and culture.">
+  <meta property="og:title" content="Circus Report">
+  <meta property="og:description" content="Making sense of the circus we call media, politics, and culture.">
+  <meta property="og:image" content="https://circus-report.pages.dev/circusreport.svg">
+  <meta property="og:url" content="https://circus-report.pages.dev">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -13,40 +20,58 @@
       color: #000000;
     }
 
+    /* ── Header ── */
     header {
       background: #ffffff;
       color: #000000;
       text-align: center;
-      padding: 20px;
+      padding: 16px 20px;
       border-bottom: 4px solid #cc0000;
     }
 
-    header img.banner {
-      max-width: 400px;
-      height: auto;
-      display: block;
-      margin: 0 auto;
+    header h1 {
+      font-size: 2.8em;
+      letter-spacing: 6px;
+      text-transform: uppercase;
+      font-family: Georgia, serif;
+      color: #000000;
     }
 
     header p.tagline {
-      font-size: 1.2em;
+      font-size: 1em;
       color: #444444;
-      margin-top: 10px;
+      margin-top: 6px;
     }
 
+    /* ── Container ── */
     .container {
       max-width: 1100px;
       margin: 0 auto;
       padding: 20px;
     }
 
-    /* Hero: top story (left 60%) + sub-headlines (right 40%) */
+    /* ── Section divider ── */
+    .divider {
+      border: none;
+      border-top: 1px solid #cccccc;
+      margin: 20px 0;
+    }
+
+    .divider-red {
+      border: none;
+      border-top: 2px solid #cc0000;
+      margin: 0 0 20px 0;
+    }
+
+    /* ══════════════════════════════════════
+       HERO SECTION
+       Left: top story (50%)
+       Right: 2x2 grid of sub-headlines (50%)
+    ══════════════════════════════════════ */
     .hero {
       display: grid;
-      grid-template-columns: 60% 40%;
-      gap: 20px;
-      border-bottom: 2px solid #cc0000;
-      padding-bottom: 20px;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
       margin-bottom: 20px;
     }
 
@@ -58,87 +83,147 @@
 
     .top-story a.img-link {
       display: block;
+      flex: 1;
     }
 
     .top-story img {
       width: 100%;
-      max-height: 340px;
+      height: 320px;
       object-fit: cover;
       display: block;
     }
 
+    .top-story .no-image {
+      width: 100%;
+      height: 320px;
+      background: #f0f0f0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #999;
+      font-size: 0.85em;
+    }
+
     .top-story a.headline {
-      font-size: 1.7em;
+      font-size: 1.4em;
       font-weight: bold;
       color: #cc0000;
       text-decoration: none;
       line-height: 1.3;
       display: block;
       text-wrap: balance;
-      margin-top: 10px;
+      margin-top: 8px;
     }
 
     .top-story a.headline:hover { text-decoration: underline; }
 
-    /* Right: sub-headlines stacked */
-    .sub-headlines {
-      display: flex;
-      flex-direction: column;
+    /* Right: 2x2 grid */
+    .sub-grid-2x2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
       gap: 12px;
     }
 
     .sub-card {
       display: flex;
-      flex-direction: row;
-      gap: 10px;
-      align-items: flex-start;
-      border-bottom: 1px solid #eeeeee;
-      padding-bottom: 12px;
-    }
-
-    .sub-card:last-child {
-      border-bottom: none;
-      padding-bottom: 0;
+      flex-direction: column;
     }
 
     .sub-card a.img-link {
       display: block;
-      flex-shrink: 0;
     }
 
     .sub-card img {
-      width: 110px;
-      height: 80px;
+      width: 100%;
+      height: 140px;
       object-fit: cover;
       display: block;
     }
 
     .sub-card .no-image {
-      width: 110px;
-      height: 80px;
+      width: 100%;
+      height: 140px;
       background: #f0f0f0;
       display: flex;
       align-items: center;
       justify-content: center;
       color: #999;
       font-size: 0.75em;
-      flex-shrink: 0;
     }
 
     .sub-card a.headline {
-      font-size: 0.95em;
+      font-size: 0.9em;
       font-weight: bold;
       color: #000080;
       text-decoration: none;
-      line-height: 1.4;
+      line-height: 1.3;
       display: block;
+      text-align: center;
       text-wrap: balance;
+      margin-top: 6px;
     }
 
     .sub-card a.headline:hover { text-decoration: underline; }
     .sub-card a.headline:visited { color: #551a8b; }
 
-    /* Text links grid */
+    /* ══════════════════════════════════════
+       ROW OF 5 SUB-HEADLINES
+    ══════════════════════════════════════ */
+    .sub-row-5 {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 14px;
+      border-top: 2px solid #cc0000;
+      border-bottom: 2px solid #cccccc;
+      padding: 16px 0;
+      margin-bottom: 20px;
+    }
+
+    .sub-row-card {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sub-row-card a.img-link {
+      display: block;
+    }
+
+    .sub-row-card img {
+      width: 100%;
+      height: 110px;
+      object-fit: cover;
+      display: block;
+    }
+
+    .sub-row-card .no-image {
+      width: 100%;
+      height: 110px;
+      background: #f0f0f0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #999;
+      font-size: 0.75em;
+    }
+
+    .sub-row-card a.headline {
+      font-size: 0.88em;
+      font-weight: bold;
+      color: #000080;
+      text-decoration: none;
+      line-height: 1.3;
+      display: block;
+      text-align: center;
+      text-wrap: balance;
+      margin-top: 6px;
+    }
+
+    .sub-row-card a.headline:hover { text-decoration: underline; }
+    .sub-row-card a.headline:visited { color: #551a8b; }
+
+    /* ══════════════════════════════════════
+       TEXT LINKS GRID
+    ══════════════════════════════════════ */
     .links-grid {
       columns: 2;
       column-gap: 40px;
@@ -158,12 +243,7 @@
     .link-item a:hover { text-decoration: underline; }
     .link-item a:visited { color: #551a8b; }
 
-    .divider {
-      border: none;
-      border-top: 1px solid #cccccc;
-      margin: 20px 0;
-    }
-
+    /* ── Footer ── */
     footer {
       text-align: center;
       padding: 20px;
@@ -173,42 +253,42 @@
       margin-top: 40px;
     }
 
-    /* Mobile */
+    /* ══════════════════════════════════════
+       MOBILE
+    ══════════════════════════════════════ */
     @media (max-width: 768px) {
+      header h1 { font-size: 1.8em; letter-spacing: 3px; }
+      header p.tagline { font-size: 0.85em; }
+
+      /* Hero: top story full width, then 2-col grid below */
       .hero {
         grid-template-columns: 1fr;
       }
 
-      .top-story a.headline {
-        font-size: 1.3em;
+      .top-story img,
+      .top-story .no-image {
+        height: 200px;
       }
 
-      /* Sub-headlines: 2-column image grid on mobile */
-      .sub-headlines {
-        display: grid;
+      .top-story a.headline { font-size: 1.1em; }
+
+      .sub-grid-2x2 {
         grid-template-columns: 1fr 1fr;
-        gap: 12px;
-      }
-
-      .sub-card {
-        flex-direction: column;
-        border-bottom: none;
-        padding-bottom: 0;
-      }
-
-      .sub-card a.img-link {
-        width: 100%;
       }
 
       .sub-card img,
       .sub-card .no-image {
-        width: 100%;
         height: 100px;
       }
 
-      .sub-card a.headline {
-        font-size: 0.9em;
-        margin-top: 5px;
+      /* Row of 5: collapse to 2 columns */
+      .sub-row-5 {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .sub-row-card img,
+      .sub-row-card .no-image {
+        height: 90px;
       }
 
       .links-grid { columns: 1; }
@@ -218,17 +298,24 @@
 <body>
 
   <header>
-    <img class="banner" src="circusreport.svg" alt="Circus Report">
+    <h1>CIRCUS REPORT</h1>
     <p class="tagline">Making sense of the circus we call media, politics, and culture.</p>
   </header>
 
   <div class="container">
-    <div class="hero">
+
+    <!-- Hero: top story + 2x2 sub-headlines -->
+    <div class="hero" style="margin-top: 20px;">
       <div class="top-story" id="top-story"></div>
-      <div class="sub-headlines" id="sub-headlines"></div>
+      <div class="sub-grid-2x2" id="sub-grid-2x2"></div>
     </div>
-    <hr class="divider">
+
+    <!-- Row of 5 sub-headlines -->
+    <div class="sub-row-5" id="sub-row-5"></div>
+
+    <!-- Text links -->
     <div class="links-grid" id="links-grid"></div>
+
   </div>
 
   <footer>
@@ -245,7 +332,7 @@
 
         const links = data.links;
 
-        // Top story
+        // ── Top story (index 0) ──
         if (links.length > 0) {
           const top = links[0];
           const topDiv = document.getElementById('top-story');
@@ -259,6 +346,11 @@
             img.alt = top.headline;
             imgLink.appendChild(img);
             topDiv.appendChild(imgLink);
+          } else {
+            const placeholder = document.createElement('div');
+            placeholder.className = 'no-image';
+            placeholder.textContent = 'No image';
+            topDiv.appendChild(placeholder);
           }
           const link = document.createElement('a');
           link.href = top.url;
@@ -268,12 +360,11 @@
           topDiv.appendChild(link);
         }
 
-        // Sub-headlines (positions 2-4)
-        const subDiv = document.getElementById('sub-headlines');
-        links.slice(1, 4).forEach(item => {
+        // ── 2x2 sub-headlines (indices 1-4) ──
+        const subGrid = document.getElementById('sub-grid-2x2');
+        links.slice(1, 5).forEach(item => {
           const card = document.createElement('div');
           card.className = 'sub-card';
-
           if (item.image) {
             const imgLink = document.createElement('a');
             imgLink.href = item.url;
@@ -290,19 +381,48 @@
             placeholder.textContent = 'No image';
             card.appendChild(placeholder);
           }
-
           const link = document.createElement('a');
           link.href = item.url;
           link.target = '_blank';
           link.className = 'headline';
           link.textContent = item.headline;
           card.appendChild(link);
-          subDiv.appendChild(card);
+          subGrid.appendChild(card);
         });
 
-        // Text links (position 5+)
+        // ── Row of 5 (indices 5-9) ──
+        const subRow = document.getElementById('sub-row-5');
+        links.slice(5, 10).forEach(item => {
+          const card = document.createElement('div');
+          card.className = 'sub-row-card';
+          if (item.image) {
+            const imgLink = document.createElement('a');
+            imgLink.href = item.url;
+            imgLink.target = '_blank';
+            imgLink.className = 'img-link';
+            const img = document.createElement('img');
+            img.src = item.image;
+            img.alt = item.headline;
+            imgLink.appendChild(img);
+            card.appendChild(imgLink);
+          } else {
+            const placeholder = document.createElement('div');
+            placeholder.className = 'no-image';
+            placeholder.textContent = 'No image';
+            card.appendChild(placeholder);
+          }
+          const link = document.createElement('a');
+          link.href = item.url;
+          link.target = '_blank';
+          link.className = 'headline';
+          link.textContent = item.headline;
+          card.appendChild(link);
+          subRow.appendChild(card);
+        });
+
+        // ── Text links (index 10+) ──
         const grid = document.getElementById('links-grid');
-        links.slice(4).forEach(item => {
+        links.slice(10).forEach(item => {
           const div = document.createElement('div');
           div.className = 'link-item';
           const prefix = item.emoji ? item.emoji : '&#9654;';
