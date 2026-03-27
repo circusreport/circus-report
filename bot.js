@@ -163,7 +163,22 @@ const FEEDS = [
   { name: 'Google Entertainment', url: 'https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNREpxYW5RU0FtVnVHZ0pWVXlnQVAB', max: 2 },
 ];
 
+async function resolveGoogleNewsUrl(googleUrl) {
+  try {
+    const response = await axios.get(googleUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' },
+      maxRedirects: 5,
+      timeout: 8000
+    });
+    // After redirects, the final URL is the real article
+    return response.request.res.responseUrl || googleUrl;
+  } catch (err) {
+    return googleUrl;
+  }
+}
+
 async function parseFeed(feedUrl, max) {
+  const isGoogleFeed = feedUrl.includes('news.google.com');
   const response = await axios.get(feedUrl, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (compatible; RSS reader)',
@@ -172,9 +187,9 @@ async function parseFeed(feedUrl, max) {
     timeout: 10000
   });
   const $ = cheerio.load(response.data, { xmlMode: true });
-  const results = [];
+  const rawItems = [];
   $('item').each((i, el) => {
-    if (results.length >= max) return false;
+    if (rawItems.length >= max) return false;
     const headline = $(el).find('title').first().text().trim()
       .replace(/<!\[CDATA\[|\]\]>/g, '').trim();
     const url = ($(el).find('link').first().text().trim() ||
@@ -182,9 +197,19 @@ async function parseFeed(feedUrl, max) {
     if (!headline || !url) return;
     if (!url.startsWith('http')) return;
     if (headline.length < 15 || headline.length > 250) return;
-    results.push({ headline, url });
+    rawItems.push({ headline, url });
   });
-  return results;
+
+  if (!isGoogleFeed) return rawItems;
+
+  // For Google News, resolve redirects in parallel to get real URLs
+  const resolved = await Promise.all(
+    rawItems.map(async item => {
+      const realUrl = await resolveGoogleNewsUrl(item.url);
+      return { ...item, url: realUrl };
+    })
+  );
+  return resolved;
 }
 
 async function fetchTopStories(existingUrls) {
