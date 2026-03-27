@@ -222,19 +222,24 @@ async function fetchTopStories(existingUrls) {
 
 // ── Gemini headline generation ────────────────────────────────────
 
-async function generateHeadlines(url) {
+async function generateHeadlines(url, fallbackHeadline) {
   try {
-    // Fetch article text
-    const pageResponse = await axios.get(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' },
-      timeout: 10000
-    });
-    const $ = cheerio.load(pageResponse.data);
-    // Extract readable text: title + meta description + first 2000 chars of body text
-    const title = $('title').text().trim();
-    const metaDesc = $('meta[name="description"]').attr('content') || '';
-    const bodyText = $('p').map((i, el) => $(el).text().trim()).get().join(' ').slice(0, 5000);
-    const articleContent = [title, metaDesc, bodyText].filter(Boolean).join('\n\n');
+    // Try to fetch article text — fall back gracefully if blocked
+    let articleContent = '';
+    try {
+      const pageResponse = await axios.get(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' },
+        timeout: 10000
+      });
+      const $ = cheerio.load(pageResponse.data);
+      const title = $('title').text().trim();
+      const metaDesc = $('meta[name="description"]').attr('content') || '';
+      const bodyText = $('p').map((i, el) => $(el).text().trim()).get().join(' ').slice(0, 5000);
+      articleContent = [title, metaDesc, bodyText].filter(Boolean).join('\n\n');
+    } catch (fetchErr) {
+      console.log('Page fetch failed, using URL and headline only:', fetchErr.message);
+      articleContent = 'URL: ' + url + (fallbackHeadline ? '\nOriginal headline: ' + fallbackHeadline : '');
+    }
 
     const systemPrompt = process.env.HEADLINE_PROMPT || 'You are a conservative news headline writer. Propose exactly 3 punchy conservative headlines. Return only a JSON array of 3 strings, nothing else.';
 
@@ -278,7 +283,7 @@ async function generateHeadlines(url) {
 async function triggerHeadlineGeneration(chatId, userId, pending) {
   await savePending(userId, { ...pending, step: 'generating_headlines' });
   bot.sendMessage(chatId, 'Generating headline options...');
-  const headlines = await generateHeadlines(pending.url);
+  const headlines = await generateHeadlines(pending.url, pending.originalHeadline || null);
   if (!headlines) {
     await savePending(userId, { ...pending, step: 'awaiting_headline' });
     bot.sendMessage(chatId, 'Could not generate headlines. Send me a headline manually.');
@@ -801,7 +806,7 @@ async function handleMessage(msg) {
       return;
     }
     const chosen = pending.fetchedStories[num - 1];
-    await savePending(userId, { url: chosen.url, step: 'fetching_images' });
+    await savePending(userId, { url: chosen.url, originalHeadline: chosen.headline, step: 'fetching_images' });
     bot.sendMessage(chatId, 'Got it. Fetching preview images for:\n"' + chosen.headline + '"');
     const images = await fetchImages(chosen.url);
     const updatedPending = await getPending(userId);
