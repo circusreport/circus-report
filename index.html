@@ -287,11 +287,14 @@
         height: 100px;
       }
 
-      /* Row of 5: text-only 2-column list on mobile */
+      /* Row of 5: text link style, 2 columns on mobile */
       .sub-row-5 {
+        display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 8px;
         padding: 10px 0;
+        border-top: 2px solid #cc0000;
+        border-bottom: 2px solid #cccccc;
       }
 
       .sub-row-card img,
@@ -300,9 +303,20 @@
       }
 
       .sub-row-card a.headline {
-        font-size: 0.85em;
-        margin-top: 0;
+        font-size: 1em;
+        color: #000080;
         text-align: left;
+        font-weight: normal;
+        margin-top: 0;
+      }
+
+      .sub-row-card a.headline::before {
+        content: '\25BA ';
+        font-size: 0.75em;
+      }
+
+      .sub-row-card a.headline:visited {
+        color: #551a8b;
       }
 
       .links-grid { columns: 1; }
