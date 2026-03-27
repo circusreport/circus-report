@@ -145,13 +145,16 @@ async function showCategoryPrompt(chatId, userId, pending, prefixMessage) {
 // ── Source scrapers (RSS-based) ──────────────────────────────────
 
 const FEEDS = [
-  { name: 'NY Post',          url: 'https://nypost.com/feed/',                        max: 2 },
-  { name: 'Deadline',         url: 'https://deadline.com/feed/',                      max: 2 },
-  { name: 'ESPN',             url: 'https://www.espn.com/espn/rss/news',              max: 2 },
-  { name: 'RealClear',        url: 'https://www.realclearpolitics.com/index.xml',     max: 2 },
-  { name: 'The Hill',         url: 'https://thehill.com/feed/',                       max: 2 },
-  { name: 'Fox News',         url: 'https://moxie.foxnews.com/google-publisher/latest.xml', max: 2 },
-  { name: 'Washington Examiner', url: 'https://www.washingtonexaminer.com/feed',      max: 2 },
+  { name: 'NY Post',              url: 'https://nypost.com/feed/',                                   max: 2 },
+  { name: 'Deadline',             url: 'https://deadline.com/feed/',                                 max: 2 },
+  { name: 'ESPN',                 url: 'https://www.espn.com/espn/rss/news',                         max: 2 },
+  { name: 'The Hill',             url: 'https://thehill.com/feed/',                                  max: 2 },
+  { name: 'Fox News',             url: 'https://moxie.foxnews.com/google-publisher/latest.xml',      max: 2 },
+  { name: 'Washington Examiner',  url: 'https://www.washingtonexaminer.com/feed',                    max: 2 },
+  { name: 'Breitbart',            url: 'https://feeds.feedburner.com/breitbart',                     max: 2 },
+  { name: 'Daily Wire',           url: 'https://www.dailywire.com/feeds/rss.xml',                    max: 2 },
+  { name: 'Just the News',        url: 'https://justthenews.com/feed',                               max: 2 },
+  { name: 'NY Post Politics',     url: 'https://nypost.com/politics/feed/',                          max: 2 },
 ];
 
 async function parseFeed(feedUrl, max) {
@@ -193,7 +196,7 @@ async function fetchTopStories(existingUrls) {
     })
   );
   console.log('Total stories: ' + allResults.length);
-  return allResults.slice(0, 10);
+  return allResults.slice(0, 15);
 }
 
 
