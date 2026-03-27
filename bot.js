@@ -294,27 +294,28 @@ async function generateHeadlines(url) {
 
     const systemPrompt = process.env.HEADLINE_PROMPT || 'You are a conservative news headline writer. Propose exactly 3 punchy conservative headlines. Return only a JSON array of 3 strings, nothing else.';
 
-    const geminiResponse = await axios.post(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + process.env.GEMINI_API_KEY,
+    const groqResponse = await axios.post(
+      'https://api.groq.com/openai/v1/chat/completions',
       {
-        contents: [{
-          parts: [{
-            text: systemPrompt + '\n\nArticle content:\n' + articleContent
-          }]
-        }],
-        generationConfig: {
-          temperature: 0.8,
-          maxOutputTokens: 500
-        }
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: 'Article content:\n' + articleContent }
+        ],
+        temperature: 0.8,
+        max_tokens: 500
       },
       {
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + process.env.GROQ_API_KEY
+        },
         timeout: 15000
       }
     );
 
-    const raw = geminiResponse.data.candidates[0].content.parts[0].text.trim();
-    console.log('Gemini raw response:', raw);
+    const raw = groqResponse.data.choices[0].message.content.trim();
+    console.log('Groq raw response:', raw);
     // Strip markdown code fences if present
     const cleaned = raw.replace(/```json|```/g, '').trim();
     // Extract JSON array even if there's surrounding text
@@ -324,7 +325,7 @@ async function generateHeadlines(url) {
     if (!Array.isArray(headlines) || headlines.length === 0) throw new Error('Invalid response format');
     return headlines.slice(0, 3);
   } catch (err) {
-    console.error('Gemini headline error:', err.message);
+    console.error('Groq headline error:', err.message);
     return null;
   }
 }
