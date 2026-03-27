@@ -196,24 +196,20 @@ function scrapeLinks($, domain, exclude, max) {
 
 async function scrapeMemeorandum() {
   const $ = await fetchPage('https://www.memeorandum.com');
-  // Memeorandum uses h2 > a for main stories
   const results = [];
   const seen = new Set();
   $('h2 a, h3 a').each((i, el) => {
     if (results.length >= 3) return false;
     const headline = $(el).text().trim();
     const url = $(el).attr('href') || '';
+    // Must be an external URL, not a memeorandum redirect or internal link
     if (!url.startsWith('http')) return;
     if (url.includes('memeorandum.com')) return;
-    if (headline.length < 15 || headline.length > 250) return;
+    if (headline.length < 20 || headline.length > 200) return;
     if (seen.has(url)) return;
     seen.add(url);
     results.push({ headline, url });
   });
-  // Fallback to generic if nothing found
-  if (results.length === 0) {
-    return scrapeLinks($, 'memeorandum.com', ['memeorandum.com/e/', '#'], 3);
-  }
   return results;
 }
 
@@ -280,18 +276,52 @@ async function scrapeNYPost() {
   const $ = await fetchPage('https://nypost.com');
   const exclude = [
     '/category/', '/tag/', '/author/', '/page/', '/video/',
-    'nypost.com/#', '?utm_', '/subscribe', '/newsletters'
+    '/podcasts/', '/shopping/', '/newsletters/', '/subscribe',
+    'nypost.com/#', 'nypost.com/'
   ];
-  return scrapeLinks($, 'nypost.com', exclude, 2);
+  const results = [];
+  const seen = new Set();
+  $('a[href]').each((i, el) => {
+    if (results.length >= 2) return false;
+    const headline = $(el).text().trim();
+    let url = $(el).attr('href') || '';
+    if (url.startsWith('/')) url = 'https://nypost.com' + url;
+    if (!url.includes('nypost.com')) return;
+    if (exclude.some(e => url.includes(e))) return;
+    // NY Post article URLs contain a year: /2026/
+    if (!/\/20\d\d\//.test(url)) return;
+    if (headline.length < 20 || headline.length > 250) return;
+    if (seen.has(url)) return;
+    seen.add(url);
+    results.push({ headline, url });
+  });
+  return results;
 }
 
 async function scrapeDeadline() {
   const $ = await fetchPage('https://deadline.com');
   const exclude = [
-    '/category/', '/tag/', '/author/', '/page/',
-    'deadline.com/#', '/subscribe', '/newsletters', '/video/'
+    '/category/', '/tag/', '/author/', '/page/', '/p/',
+    'deadline.com/#', '/subscribe', '/newsletters', '/video/',
+    'deadline.com/', // exclude bare domain link
   ];
-  return scrapeLinks($, 'deadline.com', exclude, 2);
+  const results = [];
+  const seen = new Set();
+  $('a[href]').each((i, el) => {
+    if (results.length >= 2) return false;
+    const headline = $(el).text().trim();
+    let url = $(el).attr('href') || '';
+    if (url.startsWith('/')) url = 'https://deadline.com' + url;
+    if (!url.includes('deadline.com')) return;
+    if (exclude.some(e => url.includes(e))) return;
+    // Deadline article URLs contain a year: /2026/
+    if (!/\/20\d\d\//.test(url)) return;
+    if (headline.length < 20 || headline.length > 250) return;
+    if (seen.has(url)) return;
+    seen.add(url);
+    results.push({ headline, url });
+  });
+  return results;
 }
 
 async function scrapeESPN() {
@@ -299,9 +329,29 @@ async function scrapeESPN() {
   const exclude = [
     '/video/', '/watch/', 'mml.app', '.app.link', '/scores',
     '/standings', '/schedule', '/fantasy', '/shop', '/espnplus',
-    '/insider', 'espn.com/#', '/login', '/register'
+    '/insider', 'espn.com/#', '/login', '/register',
+    'sportscenter-for-you', '/professional-wrestling/', '/nfl/',
+    '/nba/', '/mlb/', '/nhl/', '/soccer/', '/golf/', '/tennis/',
+    '/mma/', '/boxing/', '/college-football/', '/mens-college-basketball/',
+    '/womens-college-basketball/', 'clip?id='
   ];
-  return scrapeLinks($, 'espn.com', exclude, 2);
+  // ESPN articles have /story/ in the URL
+  const results = [];
+  const seen = new Set();
+  $('a[href]').each((i, el) => {
+    if (results.length >= 2) return false;
+    const headline = $(el).text().trim();
+    let url = $(el).attr('href') || '';
+    if (url.startsWith('/')) url = 'https://www.espn.com' + url;
+    if (!url.includes('espn.com')) return;
+    if (exclude.some(e => url.includes(e))) return;
+    if (!url.includes('/story/') && !url.includes('/article/')) return;
+    if (headline.length < 20 || headline.length > 200) return;
+    if (seen.has(url)) return;
+    seen.add(url);
+    results.push({ headline, url });
+  });
+  return results;
 }
 
 async function fetchTopStories(existingUrls) {
