@@ -42,6 +42,46 @@
       margin-top: 6px;
     }
 
+    /* ── Ticker ── */
+    .ticker {
+      background: #111111;
+      color: #ffffff;
+      padding: 7px 20px;
+      font-family: Arial, sans-serif;
+      font-size: 0.82em;
+      display: flex;
+      justify-content: center;
+      gap: 28px;
+      flex-wrap: wrap;
+    }
+
+    .ticker-item {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      white-space: nowrap;
+    }
+
+    .ticker-name {
+      color: #999999;
+      font-size: 0.85em;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .ticker-price {
+      font-weight: bold;
+      color: #ffffff;
+    }
+
+    .ticker-change {
+      font-size: 0.9em;
+    }
+
+    .ticker-change.up { color: #4caf50; }
+    .ticker-change.down { color: #f44336; }
+    .ticker-change.flat { color: #999999; }
+
     /* ── Container ── */
     .container {
       max-width: 1100px;
@@ -249,10 +289,9 @@
       header h1 { font-size: 1.8em; letter-spacing: 3px; }
       header p.tagline { font-size: 0.85em; }
 
-      /* Hero: top story full width, then 2x2 below */
-      .hero {
-        grid-template-columns: 1fr;
-      }
+      .ticker { gap: 14px; font-size: 0.78em; padding: 6px 12px; }
+
+      .hero { grid-template-columns: 1fr; }
 
       .top-story img,
       .top-story .no-image {
@@ -262,30 +301,18 @@
 
       .top-story a.headline { font-size: 1.1em; }
 
-      .sub-grid-2x2 {
-        grid-template-columns: 1fr 1fr;
-      }
+      .sub-grid-2x2 { grid-template-columns: 1fr 1fr; }
 
       .sub-card img,
-      .sub-card .no-image {
-        height: 110px;
-      }
+      .sub-card .no-image { height: 110px; }
 
-      /* Row of 6: 2 columns of image cards on mobile */
-      .sub-row-6 {
-        grid-template-columns: 1fr 1fr;
-      }
+      .sub-row-6 { grid-template-columns: 1fr 1fr; }
 
       .sub-row-card img,
-      .sub-row-card .no-image {
-        height: 100px;
-      }
+      .sub-row-card .no-image { height: 100px; }
 
-      .sub-row-card a.headline {
-        font-size: 0.85em;
-      }
+      .sub-row-card a.headline { font-size: 0.85em; }
 
-      /* Text links: 2 columns on mobile */
       .links-grid { grid-template-columns: repeat(2, 1fr); }
     }
   </style>
@@ -296,6 +323,15 @@
     <h1>CIRCUS REPORT</h1>
     <p class="tagline">Making sense of the circus we call media, politics, and culture.</p>
   </header>
+
+  <!-- Ticker -->
+  <div class="ticker" id="ticker">
+    <div class="ticker-item"><span class="ticker-name">BTC</span><span class="ticker-price" id="t-btc">—</span><span class="ticker-change" id="t-btc-c"></span></div>
+    <div class="ticker-item"><span class="ticker-name">S&amp;P 500</span><span class="ticker-price" id="t-sp">—</span><span class="ticker-change" id="t-sp-c"></span></div>
+    <div class="ticker-item"><span class="ticker-name">Gold</span><span class="ticker-price" id="t-gold">—</span><span class="ticker-change" id="t-gold-c"></span></div>
+    <div class="ticker-item"><span class="ticker-name">Oil</span><span class="ticker-price" id="t-oil">—</span><span class="ticker-change" id="t-oil-c"></span></div>
+    <div class="ticker-item"><span class="ticker-name">USD/EUR</span><span class="ticker-price" id="t-eur">—</span><span class="ticker-change" id="t-eur-c"></span></div>
+  </div>
 
   <div class="container">
 
@@ -319,6 +355,61 @@
   </footer>
 
   <script>
+    // ── Ticker ──────────────────────────────────────────────────────
+    function fmtChange(pct) {
+      if (pct === null || isNaN(pct)) return { text: '', cls: 'flat' };
+      const sign = pct >= 0 ? '+' : '';
+      return { text: sign + pct.toFixed(2) + '%', cls: pct >= 0 ? 'up' : 'down' };
+    }
+
+    function setTicker(id, price, change) {
+      document.getElementById(id).textContent = price;
+      const el = document.getElementById(id + '-c');
+      const c = fmtChange(change);
+      el.textContent = c.text;
+      el.className = 'ticker-change ' + c.cls;
+    }
+
+    async function loadTicker() {
+      try {
+        // BTC via CoinGecko (no key required)
+        const btcRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true');
+        const btcData = await btcRes.json();
+        const btcPrice = btcData.bitcoin.usd;
+        const btcChange = btcData.bitcoin.usd_24h_change;
+        setTicker('t-btc', '$' + btcPrice.toLocaleString('en-US', { maximumFractionDigits: 0 }), btcChange);
+      } catch (e) { document.getElementById('t-btc').textContent = 'N/A'; }
+
+      try {
+        // S&P 500, Gold, Oil, USD/EUR via Yahoo Finance proxy
+        const symbols = ['^GSPC', 'GC=F', 'CL=F', 'EURUSD=X'];
+        const yRes = await fetch('https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + symbols.join(','));
+        const yData = await yRes.json();
+        const quotes = yData.quoteResponse.result;
+
+        quotes.forEach(q => {
+          const pct = q.regularMarketChangePercent;
+          if (q.symbol === '^GSPC') {
+            setTicker('t-sp', q.regularMarketPrice.toLocaleString('en-US', { maximumFractionDigits: 0 }), pct);
+          } else if (q.symbol === 'GC=F') {
+            setTicker('t-gold', '$' + q.regularMarketPrice.toLocaleString('en-US', { maximumFractionDigits: 0 }), pct);
+          } else if (q.symbol === 'CL=F') {
+            setTicker('t-oil', '$' + q.regularMarketPrice.toFixed(2), pct);
+          } else if (q.symbol === 'EURUSD=X') {
+            setTicker('t-eur', q.regularMarketPrice.toFixed(4), pct);
+          }
+        });
+      } catch (e) {
+        ['t-sp', 't-gold', 't-oil', 't-eur'].forEach(id => {
+          document.getElementById(id).textContent = 'N/A';
+        });
+      }
+    }
+
+    loadTicker();
+    setInterval(loadTicker, 60000);
+
+    // ── News links ───────────────────────────────────────────────────
     fetch('https://news-worker.circusreportnews.workers.dev/links')
       .then(response => response.json())
       .then(data => {
@@ -327,7 +418,7 @@
 
         const links = data.links;
 
-        // ── Index 0: Top story ──
+        // Index 0: Top story
         if (links.length > 0) {
           const top = links[0];
           const topDiv = document.getElementById('top-story');
@@ -355,7 +446,7 @@
           topDiv.appendChild(link);
         }
 
-        // ── Indices 1-4: 2x2 sub-headlines ──
+        // Indices 1-4: 2x2 sub-headlines
         const subGrid = document.getElementById('sub-grid-2x2');
         links.slice(1, 5).forEach(item => {
           const card = document.createElement('div');
@@ -385,7 +476,7 @@
           subGrid.appendChild(card);
         });
 
-        // ── Indices 5-10: row of 6 ──
+        // Indices 5-10: row of 6
         const subRow = document.getElementById('sub-row-6');
         links.slice(5, 11).forEach(item => {
           const card = document.createElement('div');
@@ -415,7 +506,7 @@
           subRow.appendChild(card);
         });
 
-        // ── Index 11+: text links ──
+        // Index 11+: text links
         const grid = document.getElementById('links-grid');
         links.slice(11).forEach(item => {
           const div = document.createElement('div');
@@ -426,8 +517,7 @@
         });
       })
       .catch(() => {
-        document.getElementById('top-story').innerHTML =
-          '<p>No links yet. Check back soon.</p>';
+        document.getElementById('top-story').innerHTML = '<p>No links yet. Check back soon.</p>';
       });
   </script>
 
