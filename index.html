@@ -40,76 +40,105 @@
       padding: 20px;
     }
 
-    .top-story {
-      text-align: center;
+    /* Hero: top story (left 60%) + sub-headlines (right 40%) */
+    .hero {
+      display: grid;
+      grid-template-columns: 60% 40%;
+      gap: 20px;
       border-bottom: 2px solid #cc0000;
       padding-bottom: 20px;
       margin-bottom: 20px;
     }
 
-    .top-story img {
-      width: 100%;
-      max-height: 450px;
-      object-fit: cover;
-      margin-bottom: 15px;
+    /* Left: top story */
+    .top-story {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .top-story a.img-link {
       display: block;
     }
 
-    .top-story a {
-      font-size: 2em;
+    .top-story img {
+      width: 100%;
+      max-height: 340px;
+      object-fit: cover;
+      display: block;
+    }
+
+    .top-story a.headline {
+      font-size: 1.7em;
       font-weight: bold;
       color: #cc0000;
       text-decoration: none;
       line-height: 1.3;
       display: block;
       text-wrap: balance;
+      margin-top: 10px;
     }
 
-    .top-story a:hover { text-decoration: underline; }
+    .top-story a.headline:hover { text-decoration: underline; }
 
-    .image-columns {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 20px;
-      margin-bottom: 20px;
-      padding-bottom: 20px;
-      border-bottom: 2px solid #cccccc;
+    /* Right: sub-headlines stacked */
+    .sub-headlines {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
     }
 
-    .image-card img {
-      width: 100%;
-      height: 180px;
+    .sub-card {
+      display: flex;
+      flex-direction: row;
+      gap: 10px;
+      align-items: flex-start;
+      border-bottom: 1px solid #eeeeee;
+      padding-bottom: 12px;
+    }
+
+    .sub-card:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .sub-card a.img-link {
+      display: block;
+      flex-shrink: 0;
+    }
+
+    .sub-card img {
+      width: 110px;
+      height: 80px;
       object-fit: cover;
       display: block;
-      margin-bottom: 8px;
     }
 
-    .image-card .no-image {
-      width: 100%;
-      height: 180px;
+    .sub-card .no-image {
+      width: 110px;
+      height: 80px;
       background: #f0f0f0;
       display: flex;
       align-items: center;
       justify-content: center;
-      margin-bottom: 8px;
       color: #999;
-      font-size: 0.85em;
+      font-size: 0.75em;
+      flex-shrink: 0;
     }
 
-    .image-card a {
-      font-size: 1.05em;
+    .sub-card a.headline {
+      font-size: 0.95em;
       font-weight: bold;
       color: #000080;
       text-decoration: none;
-      line-height: 1.3;
+      line-height: 1.4;
       display: block;
-      text-align: center;
       text-wrap: balance;
     }
 
-    .image-card a:hover { text-decoration: underline; }
-    .image-card a:visited { color: #551a8b; }
+    .sub-card a.headline:hover { text-decoration: underline; }
+    .sub-card a.headline:visited { color: #551a8b; }
 
+    /* Text links grid */
     .links-grid {
       columns: 2;
       column-gap: 40px;
@@ -144,19 +173,47 @@
       margin-top: 40px;
     }
 
+    /* Mobile */
     @media (max-width: 768px) {
-      .image-columns { grid-template-columns: 1fr; }
+      .hero {
+        grid-template-columns: 1fr;
+      }
+
+      .top-story a.headline {
+        font-size: 1.3em;
+      }
+
+      /* Sub-headlines: 2-column image grid on mobile */
+      .sub-headlines {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+
+      .sub-card {
+        flex-direction: column;
+        border-bottom: none;
+        padding-bottom: 0;
+      }
+
+      .sub-card a.img-link {
+        width: 100%;
+      }
+
+      .sub-card img,
+      .sub-card .no-image {
+        width: 100%;
+        height: 100px;
+      }
+
+      .sub-card a.headline {
+        font-size: 0.9em;
+        margin-top: 5px;
+      }
+
       .links-grid { columns: 1; }
-      .top-story a { font-size: 1.3em; }
     }
   </style>
-<meta name="description" content="Making sense of the circus we call media, politics, and culture.">
-<meta property="og:title" content="Circus Report">
-<meta property="og:description" content="Making sense of the circus we call media, politics, and culture.">
-<meta property="og:image" content="https://circus-report.pages.dev/circusreport.svg">
-<meta property="og:url" content="https://circus-report.pages.dev">
-<meta property="og:type" content="website">
-<meta name="twitter:card" content="summary_large_image">
 </head>
 <body>
 
@@ -166,8 +223,10 @@
   </header>
 
   <div class="container">
-    <div class="top-story" id="top-story"></div>
-    <div class="image-columns" id="image-columns"></div>
+    <div class="hero">
+      <div class="top-story" id="top-story"></div>
+      <div class="sub-headlines" id="sub-headlines"></div>
+    </div>
     <hr class="divider">
     <div class="links-grid" id="links-grid"></div>
   </div>
@@ -186,6 +245,7 @@
 
         const links = data.links;
 
+        // Top story
         if (links.length > 0) {
           const top = links[0];
           const topDiv = document.getElementById('top-story');
@@ -193,6 +253,7 @@
             const imgLink = document.createElement('a');
             imgLink.href = top.url;
             imgLink.target = '_blank';
+            imgLink.className = 'img-link';
             const img = document.createElement('img');
             img.src = top.image;
             img.alt = top.headline;
@@ -202,20 +263,22 @@
           const link = document.createElement('a');
           link.href = top.url;
           link.target = '_blank';
+          link.className = 'headline';
           link.textContent = top.headline;
           topDiv.appendChild(link);
         }
 
-        const imageCol = document.getElementById('image-columns');
-        const imagePosts = links.slice(1, 4);
-        imagePosts.forEach(item => {
+        // Sub-headlines (positions 2-4)
+        const subDiv = document.getElementById('sub-headlines');
+        links.slice(1, 4).forEach(item => {
           const card = document.createElement('div');
-          card.className = 'image-card';
+          card.className = 'sub-card';
 
           if (item.image) {
             const imgLink = document.createElement('a');
             imgLink.href = item.url;
             imgLink.target = '_blank';
+            imgLink.className = 'img-link';
             const img = document.createElement('img');
             img.src = item.image;
             img.alt = item.headline;
@@ -231,11 +294,13 @@
           const link = document.createElement('a');
           link.href = item.url;
           link.target = '_blank';
+          link.className = 'headline';
           link.textContent = item.headline;
           card.appendChild(link);
-          imageCol.appendChild(card);
+          subDiv.appendChild(card);
         });
 
+        // Text links (position 5+)
         const grid = document.getElementById('links-grid');
         links.slice(4).forEach(item => {
           const div = document.createElement('div');
