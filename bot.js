@@ -295,7 +295,7 @@ async function generateHeadlines(url) {
     const systemPrompt = process.env.HEADLINE_PROMPT || 'You are a conservative news headline writer. Propose exactly 3 punchy conservative headlines. Return only a JSON array of 3 strings, nothing else.';
 
     const geminiResponse = await axios.post(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + process.env.GEMINI_API_KEY,
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + process.env.GEMINI_API_KEY,
       {
         contents: [{
           parts: [{
