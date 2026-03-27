@@ -145,16 +145,22 @@ async function showCategoryPrompt(chatId, userId, pending, prefixMessage) {
 // ── Source scrapers (RSS-based) ──────────────────────────────────
 
 const FEEDS = [
-  { name: 'NY Post',              url: 'https://nypost.com/feed/',                                   max: 2 },
-  { name: 'Deadline',             url: 'https://deadline.com/feed/',                                 max: 2 },
-  { name: 'ESPN',                 url: 'https://www.espn.com/espn/rss/news',                         max: 2 },
-  { name: 'The Hill',             url: 'https://thehill.com/feed/',                                  max: 2 },
-  { name: 'Fox News',             url: 'https://moxie.foxnews.com/google-publisher/latest.xml',      max: 2 },
-  { name: 'Washington Examiner',  url: 'https://www.washingtonexaminer.com/feed',                    max: 2 },
-  { name: 'Breitbart',            url: 'https://feeds.feedburner.com/breitbart',                     max: 2 },
-  { name: 'Daily Wire',           url: 'https://www.dailywire.com/feeds/rss.xml',                    max: 2 },
-  { name: 'Just the News',        url: 'https://justthenews.com/feed',                               max: 2 },
-  { name: 'NY Post Politics',     url: 'https://nypost.com/politics/feed/',                          max: 2 },
+  // Conservative & independent outlets
+  { name: 'NY Post',              url: 'https://nypost.com/feed/',                                        max: 2 },
+  { name: 'NY Post Politics',     url: 'https://nypost.com/politics/feed/',                               max: 2 },
+  { name: 'Fox News',             url: 'https://moxie.foxnews.com/google-publisher/latest.xml',           max: 2 },
+  { name: 'Washington Examiner',  url: 'https://www.washingtonexaminer.com/feed',                         max: 2 },
+  { name: 'Breitbart',            url: 'https://feeds.feedburner.com/breitbart',                          max: 2 },
+  { name: 'Daily Wire',           url: 'https://www.dailywire.com/feeds/rss.xml',                         max: 2 },
+  { name: 'Just the News',        url: 'https://justthenews.com/feed',                                    max: 2 },
+  { name: 'The Hill',             url: 'https://thehill.com/feed/',                                       max: 2 },
+  { name: 'Deadline',             url: 'https://deadline.com/feed/',                                      max: 2 },
+  { name: 'ESPN',                 url: 'https://www.espn.com/espn/rss/news',                              max: 2 },
+  // Google News — broad coverage for trending and underreported stories
+  { name: 'Google News',          url: 'https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en',          max: 4 },
+  { name: 'Google Politics',      url: 'https://news.google.com/rss/topics/CAAqIQgKIhtDQkFTRGdvSUwyMHZNRFZ2Y0dZU0FtVnVLQUFQAQ',  max: 3 },
+  { name: 'Google Technology',    url: 'https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRFZxYUdjU0FtVnVHZ0pWVXlnQVAB', max: 2 },
+  { name: 'Google Entertainment', url: 'https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNREpxYW5RU0FtVnVHZ0pWVXlnQVAB', max: 2 },
 ];
 
 async function parseFeed(feedUrl, max) {
@@ -195,8 +201,15 @@ async function fetchTopStories(existingUrls) {
       }
     })
   );
-  console.log('Total stories: ' + allResults.length);
-  return allResults.slice(0, 15);
+  // Deduplicate by URL across all feeds
+  const seen = new Set();
+  const deduped = allResults.filter(s => {
+    if (seen.has(s.url)) return false;
+    seen.add(s.url);
+    return true;
+  });
+  console.log('Total stories after dedup: ' + deduped.length);
+  return deduped;
 }
 
 
@@ -329,17 +342,20 @@ async function handleMessage(msg) {
     try {
       const data = await getLinks();
       const existingUrls = (data.links || []).map(l => l.url);
-      const stories = await fetchTopStories(existingUrls);
-      if (stories.length === 0) {
+      const allStories = await fetchTopStories(existingUrls);
+      if (allStories.length === 0) {
         bot.sendMessage(chatId, 'No new stories found. Try again later.');
         return;
       }
-      await savePending(userId, { step: 'awaiting_fetch_choice', fetchedStories: stories });
-      let message = 'Here are today\'s top stories:\n\n';
-      stories.forEach((s, i) => {
+      const page = 0;
+      const pageSize = 20;
+      const shown = allStories.slice(0, pageSize);
+      await savePending(userId, { step: 'awaiting_fetch_choice', fetchedStories: allStories, fetchPage: page });
+      let message = 'Here are today\'s top stories (1-' + shown.length + ' of ' + allStories.length + '):\n\n';
+      shown.forEach((s, i) => {
         message += (i + 1) + '. [' + s.headline + '](' + s.url + ') — ' + s.source + '\n\n';
       });
-      message += 'Reply with a number to add a story, or "cancel" to go back.';
+      message += 'Reply with a number to add a story, "more" for next batch, or "cancel" to go back.';
       bot.sendMessage(chatId, message, { parse_mode: 'Markdown', disable_web_page_preview: true });
     } catch (err) {
       console.error('Fetch error:', err);
@@ -735,9 +751,33 @@ async function handleMessage(msg) {
 
 
   if (pending.step === 'awaiting_fetch_choice') {
+    const pageSize = 20;
+
+    // Handle 'more'
+    if (text.trim().toLowerCase() === 'more') {
+      const nextPage = (pending.fetchPage || 0) + 1;
+      const start = nextPage * pageSize;
+      const shown = pending.fetchedStories.slice(start, start + pageSize);
+      if (shown.length === 0) {
+        bot.sendMessage(chatId, 'No more stories. Reply with a number to add one, or "cancel".');
+        return;
+      }
+      await savePending(userId, { ...pending, fetchPage: nextPage });
+      const total = pending.fetchedStories.length;
+      const end = Math.min(start + pageSize, total);
+      let message = 'More stories (' + (start + 1) + '-' + end + ' of ' + total + '):\n\n';
+      shown.forEach((s, i) => {
+        message += (start + i + 1) + '. [' + s.headline + '](' + s.url + ') — ' + s.source + '\n\n';
+      });
+      const hasMore = end < total;
+      message += 'Reply with a number to add a story' + (hasMore ? ', "more" for next batch' : '') + ', or "cancel" to go back.';
+      bot.sendMessage(chatId, message, { parse_mode: 'Markdown', disable_web_page_preview: true });
+      return;
+    }
+
     const num = parseInt(text.trim());
     if (isNaN(num) || num < 1 || num > pending.fetchedStories.length) {
-      bot.sendMessage(chatId, 'Please reply with a number from the list, or "cancel".');
+      bot.sendMessage(chatId, 'Please reply with a number from the list, "more" for more stories, or "cancel".');
       return;
     }
     const chosen = pending.fetchedStories[num - 1];
