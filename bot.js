@@ -142,213 +142,37 @@ async function showCategoryPrompt(chatId, userId, pending, prefixMessage) {
 }
 
 
-// ── Source scrapers ──────────────────────────────────────────────
+// ── Source scrapers (RSS-based) ──────────────────────────────────
 
-const SOURCES = [
-  { name: 'Memeorandum', scrape: scrapeMemeorandum },
-  { name: 'Techmeme',    scrape: scrapeTechmeme },
-  { name: 'MediaGazer',  scrape: scrapeMediaGazer },
-  { name: 'Drudge',      scrape: scrapeDrudge },
-  { name: 'NY Post',     scrape: scrapeNYPost },
-  { name: 'Deadline',    scrape: scrapeDeadline },
-  { name: 'ESPN',        scrape: scrapeESPN },
+const FEEDS = [
+  { name: 'NY Post',          url: 'https://nypost.com/feed/',                        max: 2 },
+  { name: 'Deadline',         url: 'https://deadline.com/feed/',                      max: 2 },
+  { name: 'ESPN',             url: 'https://www.espn.com/espn/rss/news',              max: 2 },
+  { name: 'RealClear',        url: 'https://www.realclearpolitics.com/index.xml',     max: 2 },
+  { name: 'The Hill',         url: 'https://thehill.com/feed/',                       max: 2 },
+  { name: 'Fox News',         url: 'https://moxie.foxnews.com/google-publisher/latest.xml', max: 2 },
+  { name: 'Washington Examiner', url: 'https://www.washingtonexaminer.com/feed',      max: 2 },
 ];
 
-async function fetchPage(url) {
-  const response = await axios.get(url, {
+async function parseFeed(feedUrl, max) {
+  const response = await axios.get(feedUrl, {
     headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.5',
+      'User-Agent': 'Mozilla/5.0 (compatible; RSS reader)',
+      'Accept': 'application/rss+xml, application/xml, text/xml, */*'
     },
-    timeout: 12000
+    timeout: 10000
   });
-  return cheerio.load(response.data);
-}
-
-// Generic scraper: find article links by filtering all <a> tags
-// domain: required substring in URL (ensures links go to that site)
-// exclude: array of substrings — skip URLs containing any of these
-// max: max results to return
-function scrapeLinks($, domain, exclude, max) {
+  const $ = cheerio.load(response.data, { xmlMode: true });
   const results = [];
-  const seen = new Set();
-  $('a[href]').each((i, el) => {
+  $('item').each((i, el) => {
     if (results.length >= max) return false;
-    const headline = $(el).text().trim();
-    let url = $(el).attr('href') || '';
-    // Resolve relative URLs
-    if (url.startsWith('/')) url = 'https://' + domain + url;
+    const headline = $(el).find('title').first().text().trim()
+      .replace(/<!\[CDATA\[|\]\]>/g, '').trim();
+    const url = ($(el).find('link').first().text().trim() ||
+                 $(el).find('guid').first().text().trim()).trim();
+    if (!headline || !url) return;
     if (!url.startsWith('http')) return;
-    // Must contain domain
-    if (!url.includes(domain)) return;
-    // Skip excluded patterns
-    if (exclude.some(e => url.includes(e))) return;
-    // Headline length filter: must be a real headline (20-250 chars)
-    if (headline.length < 20 || headline.length > 250) return;
-    // Deduplicate
-    if (seen.has(url)) return;
-    seen.add(url);
-    results.push({ headline, url });
-  });
-  return results;
-}
-
-async function scrapeMemeorandum() {
-  const $ = await fetchPage('https://www.memeorandum.com');
-  const results = [];
-  const seen = new Set();
-  $('h2 a, h3 a').each((i, el) => {
-    if (results.length >= 3) return false;
-    const headline = $(el).text().trim();
-    const url = $(el).attr('href') || '';
-    // Must be an external URL, not a memeorandum redirect or internal link
-    if (!url.startsWith('http')) return;
-    if (url.includes('memeorandum.com')) return;
-    if (headline.length < 20 || headline.length > 200) return;
-    if (seen.has(url)) return;
-    seen.add(url);
-    results.push({ headline, url });
-  });
-  return results;
-}
-
-async function scrapeTechmeme() {
-  const $ = await fetchPage('https://www.techmeme.com');
-  const results = [];
-  const seen = new Set();
-  $('h2 a, h3 a, .ii a').each((i, el) => {
-    if (results.length >= 2) return false;
-    const headline = $(el).text().trim();
-    const url = $(el).attr('href') || '';
-    if (!url.startsWith('http')) return;
-    if (url.includes('techmeme.com')) return;
     if (headline.length < 15 || headline.length > 250) return;
-    if (seen.has(url)) return;
-    seen.add(url);
-    results.push({ headline, url });
-  });
-  return results;
-}
-
-async function scrapeMediaGazer() {
-  const $ = await fetchPage('https://www.mediagazer.com');
-  const results = [];
-  const seen = new Set();
-  $('h2 a, h3 a').each((i, el) => {
-    if (results.length >= 2) return false;
-    const headline = $(el).text().trim();
-    const url = $(el).attr('href') || '';
-    if (!url.startsWith('http')) return;
-    if (url.includes('mediagazer.com')) return;
-    if (headline.length < 15 || headline.length > 250) return;
-    if (seen.has(url)) return;
-    seen.add(url);
-    results.push({ headline, url });
-  });
-  return results;
-}
-
-async function scrapeDrudge() {
-  const $ = await fetchPage('https://www.drudgereport.com');
-  // Drudge is all plain <a> tags — filter aggressively
-  const exclude = [
-    'drudgereport.com', 'mailto:', 'javascript:', '.gif', '.jpg', '.png',
-    '/email', '/rss', 'subscribe', 'advertise', 'contact'
-  ];
-  const results = [];
-  const seen = new Set();
-  $('a[href]').each((i, el) => {
-    if (results.length >= 2) return false;
-    const headline = $(el).text().trim();
-    const url = $(el).attr('href') || '';
-    if (!url.startsWith('http')) return;
-    if (exclude.some(e => url.toLowerCase().includes(e))) return;
-    if (headline.length < 25 || headline.length > 200) return;
-    if (seen.has(url)) return;
-    seen.add(url);
-    results.push({ headline, url });
-  });
-  return results;
-}
-
-async function scrapeNYPost() {
-  const $ = await fetchPage('https://nypost.com');
-  const exclude = [
-    '/category/', '/tag/', '/author/', '/page/', '/video/',
-    '/podcasts/', '/shopping/', '/newsletters/', '/subscribe',
-    'nypost.com/#', 'nypost.com/'
-  ];
-  const results = [];
-  const seen = new Set();
-  $('a[href]').each((i, el) => {
-    if (results.length >= 2) return false;
-    const headline = $(el).text().trim();
-    let url = $(el).attr('href') || '';
-    if (url.startsWith('/')) url = 'https://nypost.com' + url;
-    if (!url.includes('nypost.com')) return;
-    if (exclude.some(e => url.includes(e))) return;
-    // NY Post article URLs contain a year: /2026/
-    if (!/\/20\d\d\//.test(url)) return;
-    if (headline.length < 20 || headline.length > 250) return;
-    if (seen.has(url)) return;
-    seen.add(url);
-    results.push({ headline, url });
-  });
-  return results;
-}
-
-async function scrapeDeadline() {
-  const $ = await fetchPage('https://deadline.com');
-  const exclude = [
-    '/category/', '/tag/', '/author/', '/page/', '/p/',
-    'deadline.com/#', '/subscribe', '/newsletters', '/video/',
-    'deadline.com/', // exclude bare domain link
-  ];
-  const results = [];
-  const seen = new Set();
-  $('a[href]').each((i, el) => {
-    if (results.length >= 2) return false;
-    const headline = $(el).text().trim();
-    let url = $(el).attr('href') || '';
-    if (url.startsWith('/')) url = 'https://deadline.com' + url;
-    if (!url.includes('deadline.com')) return;
-    if (exclude.some(e => url.includes(e))) return;
-    // Deadline article URLs contain a year: /2026/
-    if (!/\/20\d\d\//.test(url)) return;
-    if (headline.length < 20 || headline.length > 250) return;
-    if (seen.has(url)) return;
-    seen.add(url);
-    results.push({ headline, url });
-  });
-  return results;
-}
-
-async function scrapeESPN() {
-  const $ = await fetchPage('https://www.espn.com');
-  const exclude = [
-    '/video/', '/watch/', 'mml.app', '.app.link', '/scores',
-    '/standings', '/schedule', '/fantasy', '/shop', '/espnplus',
-    '/insider', 'espn.com/#', '/login', '/register',
-    'sportscenter-for-you', '/professional-wrestling/', '/nfl/',
-    '/nba/', '/mlb/', '/nhl/', '/soccer/', '/golf/', '/tennis/',
-    '/mma/', '/boxing/', '/college-football/', '/mens-college-basketball/',
-    '/womens-college-basketball/', 'clip?id='
-  ];
-  // ESPN articles have /story/ in the URL
-  const results = [];
-  const seen = new Set();
-  $('a[href]').each((i, el) => {
-    if (results.length >= 2) return false;
-    const headline = $(el).text().trim();
-    let url = $(el).attr('href') || '';
-    if (url.startsWith('/')) url = 'https://www.espn.com' + url;
-    if (!url.includes('espn.com')) return;
-    if (exclude.some(e => url.includes(e))) return;
-    if (!url.includes('/story/') && !url.includes('/article/')) return;
-    if (headline.length < 20 || headline.length > 200) return;
-    if (seen.has(url)) return;
-    seen.add(url);
     results.push({ headline, url });
   });
   return results;
@@ -357,19 +181,18 @@ async function scrapeESPN() {
 async function fetchTopStories(existingUrls) {
   const allResults = [];
   await Promise.allSettled(
-    SOURCES.map(async source => {
+    FEEDS.map(async feed => {
       try {
-        const stories = await source.scrape();
+        const stories = await parseFeed(feed.url, feed.max);
         const filtered = stories.filter(s => !existingUrls.includes(s.url));
-        console.log(source.name + ': ' + filtered.length + ' stories (' + stories.length + ' before filter)');
-        filtered.forEach(s => allResults.push({ ...s, source: source.name }));
+        console.log(feed.name + ': ' + filtered.length + ' stories');
+        filtered.forEach(s => allResults.push({ ...s, source: feed.name }));
       } catch (err) {
-        console.log('Scrape failed for ' + source.name + ':', err.message);
+        console.log('Feed failed for ' + feed.name + ':', err.message);
       }
     })
   );
-  console.log('Total stories fetched: ' + allResults.length);
-  // Limit to 10
+  console.log('Total stories: ' + allResults.length);
   return allResults.slice(0, 10);
 }
 
