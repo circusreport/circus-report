@@ -153,32 +153,24 @@ const FEEDS = [
   { name: 'Breitbart',            url: 'https://feeds.feedburner.com/breitbart',                          max: 2 },
   { name: 'Daily Wire',           url: 'https://www.dailywire.com/feeds/rss.xml',                         max: 2 },
   { name: 'Just the News',        url: 'https://justthenews.com/feed',                                    max: 2 },
+  { name: 'The Federalist',       url: 'https://thefederalist.com/feed/',                                 max: 2 },
+  { name: 'Daily Caller',         url: 'https://dailycaller.com/feed/',                                   max: 2 },
   { name: 'The Hill',             url: 'https://thehill.com/feed/',                                       max: 2 },
+  // Entertainment
   { name: 'Deadline',             url: 'https://deadline.com/feed/',                                      max: 2 },
+  { name: 'The Wrap',             url: 'https://www.thewrap.com/feed/',                                   max: 2 },
+  { name: 'Variety',              url: 'https://variety.com/feed/',                                       max: 2 },
+  // Tech
+  { name: 'TechCrunch',           url: 'https://techcrunch.com/feed/',                                    max: 2 },
+  // Sports
   { name: 'ESPN',                 url: 'https://www.espn.com/espn/rss/news',                              max: 2 },
-  // Google News — broad coverage for trending and underreported stories
-  { name: 'Google News',          url: 'https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en',          max: 4 },
-  { name: 'Google Politics',      url: 'https://news.google.com/rss/topics/CAAqIQgKIhtDQkFTRGdvSUwyMHZNRFZ2Y0dZU0FtVnVLQUFQAQ',  max: 3 },
-  { name: 'Google Technology',    url: 'https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRFZxYUdjU0FtVnVHZ0pWVXlnQVAB', max: 2 },
-  { name: 'Google Entertainment', url: 'https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNREpxYW5RU0FtVnVHZ0pWVXlnQVAB', max: 2 },
+  // Wire services — broad general coverage
+  { name: 'AP News',              url: 'https://feeds.apnews.com/rss/topnews',                            max: 2 },
+  { name: 'Reuters',              url: 'https://feeds.reuters.com/reuters/topNews',                       max: 2 },
+  { name: 'NBC News',             url: 'https://feeds.nbcnews.com/nbcnews/public/news',                   max: 2 },
 ];
 
-async function resolveGoogleNewsUrl(googleUrl) {
-  try {
-    const response = await axios.get(googleUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' },
-      maxRedirects: 5,
-      timeout: 8000
-    });
-    // After redirects, the final URL is the real article
-    return response.request.res.responseUrl || googleUrl;
-  } catch (err) {
-    return googleUrl;
-  }
-}
-
 async function parseFeed(feedUrl, max) {
-  const isGoogleFeed = feedUrl.includes('news.google.com');
   const response = await axios.get(feedUrl, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (compatible; RSS reader)',
@@ -187,9 +179,9 @@ async function parseFeed(feedUrl, max) {
     timeout: 10000
   });
   const $ = cheerio.load(response.data, { xmlMode: true });
-  const rawItems = [];
+  const results = [];
   $('item').each((i, el) => {
-    if (rawItems.length >= max) return false;
+    if (results.length >= max) return false;
     const headline = $(el).find('title').first().text().trim()
       .replace(/<!\[CDATA\[|\]\]>/g, '').trim();
     const url = ($(el).find('link').first().text().trim() ||
@@ -197,19 +189,9 @@ async function parseFeed(feedUrl, max) {
     if (!headline || !url) return;
     if (!url.startsWith('http')) return;
     if (headline.length < 15 || headline.length > 250) return;
-    rawItems.push({ headline, url });
+    results.push({ headline, url });
   });
-
-  if (!isGoogleFeed) return rawItems;
-
-  // For Google News, resolve redirects in parallel to get real URLs
-  const resolved = await Promise.all(
-    rawItems.map(async item => {
-      const realUrl = await resolveGoogleNewsUrl(item.url);
-      return { ...item, url: realUrl };
-    })
-  );
-  return resolved;
+  return results;
 }
 
 async function fetchTopStories(existingUrls) {
