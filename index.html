@@ -381,9 +381,8 @@
       } catch (e) { document.getElementById('t-btc').textContent = 'N/A'; }
 
       try {
-        // S&P 500, Gold, Oil, USD/EUR via Yahoo Finance proxy
-        const symbols = ['^GSPC', 'GC=F', 'CL=F', 'EURUSD=X'];
-        const yRes = await fetch('https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + symbols.join(','));
+        // S&P 500, Gold, Oil, USD/EUR via Cloudflare Worker proxy
+        const yRes = await fetch('https://news-worker.circusreportnews.workers.dev/quotes');
         const yData = await yRes.json();
         const quotes = yData.quoteResponse.result;
 
